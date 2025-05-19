@@ -3,6 +3,8 @@ include(utils)
 # Directory in which ROOT will be downloaded
 SET(ROOT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/root")
 
+set(DETECTED_OS_VERS "ubuntu-22.04")
+
 set(ROOT_TAR_FILE root_v6.30.02_cxx17_python3.9_${DETECTED_OS_VERS}.tar.gz)
 set(ROOT_SHA_KEY ${DETECTED_OS_VERS}-ROOT)
 if(APPLE)
