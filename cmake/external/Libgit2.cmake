@@ -17,6 +17,8 @@ if (PkgConfig_FOUND)
     pkg_check_modules(LIBGIT2 libgit2)
 endif ()
 
+set(DETECTED_OS_VERS "ubuntu-22.04")
+
 if (LIBGIT2_FOUND)
     message(STATUS "Found libgit2: ${LIBGIT2_LIBRARIES}")
     # include directories

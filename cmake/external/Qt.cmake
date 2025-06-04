@@ -2,6 +2,8 @@ include(utils)
 
 SET(QT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/qt")
 
+set(DETECTED_OS_VERS "ubuntu-22.04")
+
 set(QT_TAR_FILE qt_v5.12.10_${DETECTED_OS_VERS}.tar.gz)
 
 download_verify_extract(
