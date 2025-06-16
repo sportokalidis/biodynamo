@@ -94,7 +94,7 @@ static bool GetCriterion(real_t spatial_range, int target_n) {
   }
 
 #pragma omp parallel for reduction(+ : same_type_close, diff_type_close, \
-                                   num_close)
+                                       num_close)
   for (int i1 = 0; i1 < num_cells_sub_vol; i1++) {
     for (int i2 = i1 + 1; i2 < num_cells_sub_vol; i2++) {
       curr_dist = Math::GetL2Distance(pos_sub_vol[i1], pos_sub_vol[i2]);
