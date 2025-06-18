@@ -4,6 +4,12 @@ include(utils)
 SET(ROOT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/root")
 
 set(ROOT_TAR_FILE root_v6.30.02_cxx17_python3.9_${DETECTED_OS_VERS}.tar.gz)
+
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
+  set(ROOT_TAR_FILE root_v6.30.02_cxx17_python3.9_ubuntu-22.04.tar.gz)
+  set(ROOT_SHA_KEY ubuntu-22.04-ROOT)
+endif()
+
 set(ROOT_SHA_KEY ${DETECTED_OS_VERS}-ROOT)
 if(APPLE)
   if("${DETECTED_OS_VERS}" MATCHES "^osx-15" OR
@@ -84,7 +90,8 @@ download_verify_extract(
   http://cern.ch/biodynamo-lfs/third-party/${ROOT_TAR_FILE}
   ${ROOT_SOURCE_DIR}
   ${ROOT_SHA}
-)
+ )
+
 
 # Run again find_package in order to find ROOT
 find_package(ROOT COMPONENTS Geom Gui GenVector REQUIRED)

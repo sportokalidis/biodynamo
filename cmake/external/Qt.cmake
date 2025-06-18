@@ -4,6 +4,10 @@ SET(QT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/qt")
 
 set(QT_TAR_FILE qt_v5.12.10_${DETECTED_OS_VERS}.tar.gz)
 
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
+    set(QT_TAR_FILE qt_v5.12.10_ubuntu-22.04.tar.gz)
+endif()
+
 download_verify_extract(
   http://cern.ch/biodynamo-lfs/third-party/${QT_TAR_FILE}
   ${QT_SOURCE_DIR}
