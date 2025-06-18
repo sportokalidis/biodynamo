@@ -2,7 +2,9 @@ cmake
 curl
 freeglut3-dev
 g++
+g++-11
 gcc
+gcc-11
 git
 libblas-dev
 libbz2-dev
