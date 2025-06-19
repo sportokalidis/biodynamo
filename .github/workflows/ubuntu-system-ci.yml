@@ -115,6 +115,9 @@ jobs:
         if [ "${{ env.OSVERS }}" = "ubuntu-22.04" ]; then
           echo "REALT=double" >> $GITHUB_ENV
         fi
+        if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
+          echo "REALT=double" >> $GITHUB_ENV
+        fi
 
     # Don't do this in the `Build BioDynaMo step`, because notebooks might time out in GHA
     # runners, while waiting for other targets to be compiled. Run notebooks only
