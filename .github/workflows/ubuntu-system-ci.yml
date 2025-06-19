@@ -116,7 +116,7 @@ jobs:
           echo "REALT=double" >> $GITHUB_ENV
         fi
         if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
-          echo "REALT=float" >> $GITHUB_ENV
+          echo "REALT=double" >> $GITHUB_ENV
         fi
 
     # Don't do this in the `Build BioDynaMo step`, because notebooks might time out in GHA
