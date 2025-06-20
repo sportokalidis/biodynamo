@@ -46,10 +46,6 @@ curl -L -O  https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/${C
 sudo bash "${CMAKE_SH}" --prefix=/usr/local --skip-license
 rm "${CMAKE_SH}"
 
-# Install required packages
-sudo apt-get install -y \
-  $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-22.04/package_list_required)
-
 sudo apt update
 sudo apt install software-properties-common
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test
@@ -60,6 +56,12 @@ sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
 sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
 sudo update-alternatives --config gcc
 sudo update-alternatives --config g++
+
+# Install required packages
+sudo apt-get install -y \
+  $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-22.04/package_list_required)
+
+
 
 if [ -n "${PYENV_ROOT}" ]; then
   unset PYENV_ROOT
