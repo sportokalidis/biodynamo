@@ -50,6 +50,11 @@ rm "${CMAKE_SH}"
 sudo apt-get install -y \
   $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-22.04/package_list_required)
 
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+sudo update-alternatives --config gcc
+sudo update-alternatives --config g++
+
 if [ -n "${PYENV_ROOT}" ]; then
   unset PYENV_ROOT
 fi
