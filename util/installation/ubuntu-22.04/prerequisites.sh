@@ -50,6 +50,12 @@ rm "${CMAKE_SH}"
 sudo apt-get install -y \
   $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-22.04/package_list_required)
 
+sudo apt update
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt update
+sudo apt install gcc-13 g++-13
+
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
 sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
 sudo update-alternatives --config gcc
