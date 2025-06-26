@@ -200,7 +200,7 @@ function(fix_rootcling_omp_issue)
   string(REGEX MATCH "^[0-9]+" GCC_VERSION_MAJOR "${GCC_VERSION}")
 
   # Use custom omp.h if compiler didn't resolve full path or version > 11
-  if ("${OMP_HEADER_PATH}" STREQUAL "include/omp.h" OR GCC_VERSION_MAJOR GREATER 10)
+  if ("${OMP_HEADER_PATH}" STREQUAL "include/omp.h" OR GCC_VERSION_MAJOR GREATER 11)
     message(STATUS "Using safe omp.h workaround due to GCC version ${GCC_VERSION} or unresolved omp.h path")
     if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/omp/omp.h")
       execute_process(COMMAND cp -a ${CMAKE_SOURCE_DIR}/third_party/omp ${CMAKE_BINARY_DIR})

@@ -9,9 +9,9 @@ if(APPLE AND "${DETECTED_ARCH}" STREQUAL "i386")
 elseif(APPLE AND "${DETECTED_ARCH}" STREQUAL "arm64")
   SET(PARAVIEW_TAR_FILE paraview_v5.10.0_${DETECTED_OS_VERS}_default.tar.gz)
 else()
-  SET(PARAVIEW_TAR_FILE paraview_v5.9.0_${DETECTED_OS_VERS}_default.tar.gz)
+  SET(PARAVIEW_TAR_FILE paraview_v5.13.3_${DETECTED_OS_VERS}_default.tar.gz)
   if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
-    SET(PARAVIEW_TAR_FILE paraview_v5.9.0_ubuntu-22.04_default.tar.gz)
+    SET(PARAVIEW_TAR_FILE paraview_v5.13.3_ubuntu-22.04_default.tar.gz)
   endif()
 endif()
 set(PARAVIEW_SHA_KEY ${DETECTED_OS_VERS}-ParaView)
@@ -22,8 +22,33 @@ message(STATUS "Using  ParaView source dir : ${PARAVIEW_SOURCE_DIR}")
 message(STATUS "Using  ParaView SHA key    : ${PARAVIEW_SHA_KEY}")
 message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
 
-download_verify_extract(
-  http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
-  ${PARAVIEW_SOURCE_DIR}
-  ${PARAVIEW_SHA}
+# download_verify_extract(
+#   http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
+#   ${PARAVIEW_SOURCE_DIR}
+#   ${PARAVIEW_SHA}
+# )
+
+# Define the URL and destination
+set(PARAVIEW_TARBALL_URL "https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download")
+set(PARAVIEW_TARBALL "${PARAVIEW_SOURCE_DIR}/paraview-5.13.3.tar.gz")
+
+# Download the tarball
+file(DOWNLOAD
+  ${PARAVIEW_TARBALL_URL}
+  ${PARAVIEW_TARBALL}
+  SHOW_PROGRESS
+  STATUS download_status
 )
+
+# Check if download succeeded (optional, but safer)
+list(GET download_status 0 status_code)
+if(NOT status_code EQUAL 0)
+  message(FATAL_ERROR "Failed to download ParaView tarball: ${download_status}")
+endif()
+
+# Extract the tarball
+execute_process(
+  COMMAND ${CMAKE_COMMAND} -E tar xzf ${PARAVIEW_TARBALL}
+  WORKING_DIRECTORY ${PARAVIEW_SOURCE_DIR}
+)
+
