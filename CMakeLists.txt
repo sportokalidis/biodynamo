@@ -344,6 +344,8 @@ if(numa)
 endif()
 
 if(paraview)
+    find_package(OpenGL REQUIRED)
+    find_package(X11 REQUIRED)
     # If we specify a custom location for ParaView then we need to specify also a custom location for Qt.
     if ((DEFINED ENV{ParaView_DIR} AND NOT DEFINED ENV{Qt5_DIR}) OR (NOT DEFINED ENV{ParaView_DIR} AND DEFINED ENV{Qt5_DIR}))
         MESSAGE(FATAL_ERROR "\nFATAL ERROR \nYou need to specify both ParaView_DIR and Qt5_DIR in order to build "
