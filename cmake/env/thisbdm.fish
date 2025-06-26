@@ -169,7 +169,7 @@ function source_thisbdm
     # paraview versions might be different between OSes
     set -l bdm_pv_version '5.13'
     if test (uname) = 'Darwin'
-        set -l bdm_pv_version '5.13'
+        set -l bdm_pv_version '5.9'
     end
 
     # Clear the env from previously set ParaView and Qt paths.
