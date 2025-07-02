@@ -23,7 +23,7 @@ message(STATUS "Using  ParaView SHA key    : ${PARAVIEW_SHA_KEY}")
 message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
 
 
-if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-22.04 OR ${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
   # Define the URL and destination
   set(PARAVIEW_TARBALL_URL "https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download")
   set(PARAVIEW_TARBALL "${PARAVIEW_SOURCE_DIR}/paraview-5.13.3.tar.gz")
