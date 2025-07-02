@@ -41,6 +41,13 @@ if(${DETECTED_OS_VERS} STREQUAL ubuntu-22.04 OR ${DETECTED_OS_VERS} STREQUAL ubu
   if(NOT status_code EQUAL 0)
     message(FATAL_ERROR "Failed to download ParaView tarball: ${download_status}")
   endif()
+
+  # Extract the tarball
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E tar xzf ${PARAVIEW_TARBALL}
+    WORKING_DIRECTORY ${PARAVIEW_SOURCE_DIR}
+  )
+  
 else()
   download_verify_extract(
     http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
@@ -49,10 +56,4 @@ else()
   )
 endif()
 
-
-# Extract the tarball
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E tar xzf ${PARAVIEW_TARBALL}
-  WORKING_DIRECTORY ${PARAVIEW_SOURCE_DIR}
-)
 
