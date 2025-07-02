@@ -1,6 +1,6 @@
 include(utils)
 
-SET(QT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/")
+SET(QT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/qt")
 
 set(QT_TAR_FILE qt_v5.12.10_${DETECTED_OS_VERS}.tar.gz)
 
@@ -8,35 +8,38 @@ if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
     set(QT_TAR_FILE qt_v5.12.10_ubuntu-22.04.tar.gz)
 endif()
 
-# download_verify_extract(
-#   http://cern.ch/biodynamo-lfs/third-party/${QT_TAR_FILE}
-#   ${QT_SOURCE_DIR}
-#   ${${DETECTED_OS_VERS}-Qt}
-# )
 
-# Define the URL and destination
-set(QT_TARBALL_URL "https://cernbox.cern.ch/s/lmzhPJDgBPFMSmZ/download")
-set(QT_TARBALL "${QT_SOURCE_DIR}/qt-5.15.2.tar.gz")
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
+  # Define the URL and destination
+  set(QT_TARBALL_URL "https://cernbox.cern.ch/s/NiJLkGZL50hZb66/download")
+  set(QT_TARBALL "${QT_SOURCE_DIR}/qt-5.15.2.tar.gz")
 
-# Download the tarball
-file(DOWNLOAD
-  ${QT_TARBALL_URL}
-  ${QT_TARBALL}
-  SHOW_PROGRESS
-  STATUS qt_download_status
-)
+  # Download the tarball
+  file(DOWNLOAD
+    ${QT_TARBALL_URL}
+    ${QT_TARBALL}
+    SHOW_PROGRESS
+    STATUS qt_download_status
+  )
 
-# Check if download succeeded (optional)
-list(GET qt_download_status 0 qt_status_code)
-if(NOT qt_status_code EQUAL 0)
-  message(FATAL_ERROR "Failed to download Qt tarball: ${qt_download_status}")
+  # Check if download succeeded (optional)
+  list(GET qt_download_status 0 qt_status_code)
+  if(NOT qt_status_code EQUAL 0)
+    message(FATAL_ERROR "Failed to download Qt tarball: ${qt_download_status}")
+  endif()
+
+  # Extract the tarball
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E tar xzf ${QT_TARBALL}
+    WORKING_DIRECTORY ${QT_SOURCE_DIR}
+  )
+else()
+  download_verify_extract(
+    http://cern.ch/biodynamo-lfs/third-party/${QT_TAR_FILE}
+    ${QT_SOURCE_DIR}
+    ${${DETECTED_OS_VERS}-Qt}
+  )
 endif()
-
-# Extract the tarball
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E tar xzf ${QT_TARBALL}
-  WORKING_DIRECTORY ${QT_SOURCE_DIR}
-)
 
 # temporal workaround to avoid libprotobuf error for paraview
 # use only until patched archive has been uploaded

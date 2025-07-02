@@ -22,23 +22,26 @@ message(STATUS "Using  ParaView source dir : ${PARAVIEW_SOURCE_DIR}")
 message(STATUS "Using  ParaView SHA key    : ${PARAVIEW_SHA_KEY}")
 message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
 
-# download_verify_extract(
-#   http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
-#   ${PARAVIEW_SOURCE_DIR}
-#   ${PARAVIEW_SHA}
-# )
 
-# Define the URL and destination
-set(PARAVIEW_TARBALL_URL "https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download")
-set(PARAVIEW_TARBALL "${PARAVIEW_SOURCE_DIR}/paraview-5.13.3.tar.gz")
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
+  # Define the URL and destination
+  set(PARAVIEW_TARBALL_URL "https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download")
+  set(PARAVIEW_TARBALL "${PARAVIEW_SOURCE_DIR}/paraview-5.13.3.tar.gz")
 
-# Download the tarball
-file(DOWNLOAD
-  ${PARAVIEW_TARBALL_URL}
-  ${PARAVIEW_TARBALL}
-  SHOW_PROGRESS
-  STATUS download_status
-)
+  # Download the tarball
+  file(DOWNLOAD
+    ${PARAVIEW_TARBALL_URL}
+    ${PARAVIEW_TARBALL}
+    SHOW_PROGRESS
+    STATUS download_status
+  )
+else()
+  download_verify_extract(
+    http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
+    ${PARAVIEW_SOURCE_DIR}
+    ${PARAVIEW_SHA}
+  )
+endif()
 
 # Check if download succeeded (optional, but safer)
 list(GET download_status 0 status_code)
