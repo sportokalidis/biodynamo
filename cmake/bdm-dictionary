@@ -90,7 +90,7 @@ static struct BioDynaMoDictInit {
                                   "/include", 
                                   "/include"]
             else:
-                include_suffix = ["/include/paraview-5.9", 
+                include_suffix = ["/include/paraview-5.13", 
                                   "/include", 
                                   "/include"]
             cnt = 0

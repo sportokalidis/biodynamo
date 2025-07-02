@@ -9,7 +9,7 @@ if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
 endif()
 
 
-if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04 OR ${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-22.04 OR ${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
   # Define the URL and destination
   # set(QT_TARBALL_URL "https://cernbox.cern.ch/s/L5E6F5w0U2K3GdF/download")
   # set(QT_TARBALL "${QT_SOURCE_DIR}/qt-5.15.2.tar.gz")
@@ -35,10 +35,11 @@ if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04 OR ${DETECTED_OS_VERS} STREQUAL ubu
   # )
 
   download_verify_extract(
-    http://cern.ch/biodynamo-lfs/third-party/${QT_TAR_FILE}
+    https://cernbox.cern.ch/s/L5E6F5w0U2K3GdF/download
     ${QT_SOURCE_DIR}
     ${${DETECTED_OS_VERS}-Qt}
   )
+
 else()
   download_verify_extract(
     http://cern.ch/biodynamo-lfs/third-party/${QT_TAR_FILE}

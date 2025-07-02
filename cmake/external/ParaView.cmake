@@ -17,13 +17,13 @@ endif()
 set(PARAVIEW_SHA_KEY ${DETECTED_OS_VERS}-ParaView)
 set(PARAVIEW_SHA ${${PARAVIEW_SHA_KEY}})
 
-message(STATUS "Using  ParaView tarball    : ${PARAVIEW_TAR_FILE}")
-message(STATUS "Using  ParaView source dir : ${PARAVIEW_SOURCE_DIR}")
-message(STATUS "Using  ParaView SHA key    : ${PARAVIEW_SHA_KEY}")
-message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
+# message(STATUS "Using  ParaView tarball    : ${PARAVIEW_TAR_FILE}")
+# message(STATUS "Using  ParaView source dir : ${PARAVIEW_SOURCE_DIR}")
+# message(STATUS "Using  ParaView SHA key    : ${PARAVIEW_SHA_KEY}")
+# message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
 
 
-if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04 OR ${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-22.04 OR ${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
   # # Define the URL and destination
   # set(PARAVIEW_TARBALL_URL "https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download")
   # set(PARAVIEW_TARBALL "${PARAVIEW_SOURCE_DIR}/paraview-5.13.3.tar.gz")
@@ -48,13 +48,23 @@ if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04 OR ${DETECTED_OS_VERS} STREQUAL ubu
   #   WORKING_DIRECTORY ${PARAVIEW_SOURCE_DIR}
   # )
 
+  message(STATUS "Using  ParaView tarball    : paraview-5.13.3.tar.gz")
+  message(STATUS "Using  ParaView source dir : ${PARAVIEW_SOURCE_DIR}")
+  message(STATUS "Using  ParaView SHA key    : ${PARAVIEW_SHA_KEY}")
+  message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
+
   download_verify_extract(
-    http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
+    https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download
     ${PARAVIEW_SOURCE_DIR}
     ${PARAVIEW_SHA}
   )
-
 else()
+
+  message(STATUS "Using  ParaView tarball    : ${PARAVIEW_TAR_FILE}")
+  message(STATUS "Using  ParaView source dir : ${PARAVIEW_SOURCE_DIR}")
+  message(STATUS "Using  ParaView SHA key    : ${PARAVIEW_SHA_KEY}")
+  message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
+
   download_verify_extract(
     http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
     ${PARAVIEW_SOURCE_DIR}
