@@ -35,6 +35,12 @@ if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
     SHOW_PROGRESS
     STATUS download_status
   )
+
+  # Check if download succeeded (optional, but safer)
+  list(GET download_status 0 status_code)
+  if(NOT status_code EQUAL 0)
+    message(FATAL_ERROR "Failed to download ParaView tarball: ${download_status}")
+  endif()
 else()
   download_verify_extract(
     http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
@@ -43,11 +49,6 @@ else()
   )
 endif()
 
-# Check if download succeeded (optional, but safer)
-list(GET download_status 0 status_code)
-if(NOT status_code EQUAL 0)
-  message(FATAL_ERROR "Failed to download ParaView tarball: ${download_status}")
-endif()
 
 # Extract the tarball
 execute_process(
