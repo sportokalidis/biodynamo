@@ -165,18 +165,9 @@ if(APPLE)
 endif()
 
 if(UNIX AND NOT APPLE)
+  set(CMAKE_BDM_PVVERSION "5.9")
   set(LINUX TRUE)
   add_definitions("-DLINUX")
-
-  # Read /etc/os-release to get the Ubuntu version
-  file(READ "/etc/os-release" OS_RELEASE_CONTENTS)
-
-  # Look for VERSION_ID="24.04"
-  if(OS_RELEASE_CONTENTS MATCHES "VERSION_ID=\"24\\.04\"")
-    set(CMAKE_BDM_PVVERSION "5.13")
-  else()
-    set(CMAKE_BDM_PVVERSION "5.9")
-  endif()
 endif()
 
 set(CMAKE_VISIBILITY_INLINES_HIDDEN "ON")

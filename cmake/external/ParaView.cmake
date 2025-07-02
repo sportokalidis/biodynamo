@@ -24,28 +24,34 @@ message(STATUS "Verify ParaView SHA        : ${PARAVIEW_SHA}")
 
 
 if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04 OR ${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
-  # Define the URL and destination
-  set(PARAVIEW_TARBALL_URL "https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download")
-  set(PARAVIEW_TARBALL "${PARAVIEW_SOURCE_DIR}/paraview-5.13.3.tar.gz")
+  # # Define the URL and destination
+  # set(PARAVIEW_TARBALL_URL "https://cernbox.cern.ch/s/EEi5Jeu4e9bn0nr/download")
+  # set(PARAVIEW_TARBALL "${PARAVIEW_SOURCE_DIR}/paraview-5.13.3.tar.gz")
 
-  # Download the tarball
-  file(DOWNLOAD
-    ${PARAVIEW_TARBALL_URL}
-    ${PARAVIEW_TARBALL}
-    SHOW_PROGRESS
-    STATUS download_status
-  )
+  # # Download the tarball
+  # file(DOWNLOAD
+  #   ${PARAVIEW_TARBALL_URL}
+  #   ${PARAVIEW_TARBALL}
+  #   SHOW_PROGRESS
+  #   STATUS download_status
+  # )
 
-  # Check if download succeeded (optional, but safer)
-  list(GET download_status 0 status_code)
-  if(NOT status_code EQUAL 0)
-    message(FATAL_ERROR "Failed to download ParaView tarball: ${download_status}")
-  endif()
+  # # Check if download succeeded (optional, but safer)
+  # list(GET download_status 0 status_code)
+  # if(NOT status_code EQUAL 0)
+  #   message(FATAL_ERROR "Failed to download ParaView tarball: ${download_status}")
+  # endif()
 
-  # Extract the tarball
-  execute_process(
-    COMMAND ${CMAKE_COMMAND} -E tar xzf ${PARAVIEW_TARBALL}
-    WORKING_DIRECTORY ${PARAVIEW_SOURCE_DIR}
+  # # Extract the tarball
+  # execute_process(
+  #   COMMAND ${CMAKE_COMMAND} -E tar xzf ${PARAVIEW_TARBALL}
+  #   WORKING_DIRECTORY ${PARAVIEW_SOURCE_DIR}
+  # )
+
+  download_verify_extract(
+    http://cern.ch/biodynamo-lfs/third-party/${PARAVIEW_TAR_FILE}
+    ${PARAVIEW_SOURCE_DIR}
+    ${PARAVIEW_SHA}
   )
 
 else()

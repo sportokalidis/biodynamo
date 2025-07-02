@@ -85,25 +85,14 @@ static struct BioDynaMoDictInit {
         if not args.out_of_source:
             # For Apple machines, ParaView is version 5.10 
             system_config = platform.uname()
-            if system_config.system == "Darwin":
-                include_suffix = ["/include/paraview-5.10", "/include", "/include"]
-            elif system_config.system == "Linux":
-                ubuntu_version = ""
-                try:
-                    with open("/etc/os-release") as f:
-                        for line in f:
-                            if line.startswith("VERSION_ID="):
-                                ubuntu_version = line.strip().split("=")[1].strip('"')
-                                break
-                except FileNotFoundError:
-                    pass
-
-                if ubuntu_version == "24.04":
-                    include_suffix = ["/include/paraview-5.13", "/include", "/include"]
-                else:
-                    include_suffix = ["/include/paraview-5.9", "/include", "/include"]
+            if (system_config.system == "Darwin"):
+                include_suffix = ["/include/paraview-5.10", 
+                                  "/include", 
+                                  "/include"]
             else:
-                include_suffix = ["/include/paraview-5.9", "/include", "/include"]
+                include_suffix = ["/include/paraview-5.9", 
+                                  "/include", 
+                                  "/include"]
             cnt = 0
             # default includes
             for e in environmentals: 
