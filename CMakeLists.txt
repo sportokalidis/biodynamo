@@ -165,9 +165,33 @@ if(APPLE)
 endif()
 
 if(UNIX AND NOT APPLE)
-  set(CMAKE_BDM_PVVERSION "5.13")
+  execute_process(
+    COMMAND lsb_release -rs
+    OUTPUT_VARIABLE UBUNTU_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  
+  message(STATUS "Detected Ubuntu version: ${UBUNTU_VERSION}")
+
+  if("${UBUNTU_VERSION}" VERSION_EQUAL "22.04")
+    set(CMAKE_BDM_PVVERSION "5.9")
+    message(STATUS "Setting ParaView version to 5.9 for Ubuntu 22.04")
+  elseif("${UBUNTU_VERSION}" VERSION_EQUAL "24.04")
+    set(CMAKE_BDM_PVVERSION "5.13")
+    message(STATUS "Setting ParaView version to 5.13 for Ubuntu 24.04")
+  else()
+    message(WARNING "Unsupported Ubuntu version: ${UBUNTU_VERSION}. Defaulting to ParaView 5.9.")
+    set(CMAKE_BDM_PVVERSION "5.9")
+  endif()
+
   set(LINUX TRUE)
   add_definitions("-DLINUX")
+endif()
+
+# Ensure CMAKE_BDM_PVVERSION is always set with a fallback value
+if(NOT DEFINED CMAKE_BDM_PVVERSION)
+  set(CMAKE_BDM_PVVERSION "5.9")
 endif()
 
 set(CMAKE_VISIBILITY_INLINES_HIDDEN "ON")

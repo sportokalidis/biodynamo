@@ -130,8 +130,29 @@ function(build_shared_library TARGET)
     else()
       set(BDM_OUT_OF_SRC_ARG --bdm-source ${CMAKE_SOURCE_DIR})
     endif()
+    # Determine ParaView version to pass to bdm-dictionary
+    if(DEFINED CMAKE_BDM_PVVERSION AND NOT "${CMAKE_BDM_PVVERSION}" STREQUAL "")
+      set(BDM_PVVERSION_ARG "--pvversion;${CMAKE_BDM_PVVERSION}")
+    else()
+      # Fallback logic based on OS detection
+      if(APPLE)
+        set(BDM_PVVERSION_ARG "--pvversion;5.10")
+      else()
+        # For Linux, try to detect Ubuntu version
+        execute_process(COMMAND lsb_release -rs
+                       OUTPUT_VARIABLE UBUNTU_VERSION
+                       ERROR_QUIET
+                       OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if("${UBUNTU_VERSION}" STREQUAL "24.04")
+          set(BDM_PVVERSION_ARG "--pvversion;5.13")
+        else()
+          set(BDM_PVVERSION_ARG "--pvversion;5.9")
+        endif()
+      endif()
+    endif()
+    
     add_custom_command(OUTPUT "${BDM_DICT_FILE}"
-                       COMMAND ${Python_EXECUTABLE} ${BDM_DICT_BIN_PATH}/bdm-dictionary ${BDM_OUT_OF_SRC_ARG} --output ${BDM_DICT_FILE} --include-dirs ${INCLUDE_DIRS} --headers ${ARG_HEADERS}
+                       COMMAND ${Python_EXECUTABLE} ${BDM_DICT_BIN_PATH}/bdm-dictionary ${BDM_OUT_OF_SRC_ARG} --output ${BDM_DICT_FILE} --include-dirs ${INCLUDE_DIRS} --headers ${ARG_HEADERS} ${BDM_PVVERSION_ARG}
                        DEPENDS ${ARG_HEADERS} ${BDM_DICT_BIN_PATH}/bdm-dictionary)
     # generate shared library
     add_library(${TARGET} SHARED ${ARG_SOURCES} ${DICT_FILE}.cc ${BDM_DICT_FILE})

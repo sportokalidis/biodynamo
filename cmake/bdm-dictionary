@@ -52,9 +52,15 @@ if __name__ == '__main__':
     parser.add_argument('--bdm-source', action='store', type=str, required=False, help='Source directory of BioDynaMo for bdm build.')
     parser.add_argument('--include-dirs', nargs='+', type=str, required=True, help='At least one directory that contains the header files.')
     parser.add_argument('--headers', nargs='+', type=str, required=True, help='At least one header file containing biodynamo definitions.')
+    parser.add_argument('--pvversion', type=str, required=False, default='5.9', help='ParaView Version.')
 
     args = parser.parse_args()
-
+    
+    # Handle ParaView version with fallback logic
+    pvversion = args.pvversion
+    
+    print("Generating BioDynaMo dictionary file: {}".format(args.output))
+    print("Using ParaView version: {}".format(pvversion))
     with open(args.output, "w") as f:
         f.write("""
 // BioDynaMo dictionary.
@@ -90,7 +96,7 @@ static struct BioDynaMoDictInit {
                                   "/include", 
                                   "/include"]
             else:
-                include_suffix = ["/include/paraview-5.13", 
+                include_suffix = ["/include/paraview-" + pvversion, 
                                   "/include", 
                                   "/include"]
             cnt = 0
