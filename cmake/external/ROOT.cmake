@@ -75,13 +75,13 @@ set(ROOT_SHA ${${ROOT_SHA_KEY}})
 
 if(${DETECTED_OS_VERS} STREQUAL ubuntu-22.04)
   # set(ROOT_SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/root")
-  set(ROOT_TARBALL "${ROOT_SOURCE_DIR}/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
+  set(ROOT_TARBALL "${ROOT_SOURCE_DIR}/root_v6.34.06.Linux-debian12-x86_64-gcc12.2.tar.gz")
 
   # Make sure the destination exists
   file(MAKE_DIRECTORY ${ROOT_SOURCE_DIR})
 
   # Set the OneDrive direct download URL (ensure this actually works)
-  set(ROOT_URL "https://www.dropbox.com/scl/fi/x295fulj8uazjgohz8raw/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz?rlkey=smpjflpby9h7l8udzja83ag83&st=cw8z48wa&dl=1")
+  set(ROOT_URL "https://www.dropbox.com/scl/fi/eehzswc0slp1ggcxdvugi/root_v6.34.06.Linux-debian12-x86_64-gcc12.2.tar.gz?rlkey=imouhqh7re1ebr0pcs3xuphe2&st=kb588uy3&dl=1")
 
   message(STATUS "Using  ROOT tarball    : ${ROOT_TARBALL}")
   message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}")
