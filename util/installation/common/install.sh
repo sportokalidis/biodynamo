@@ -56,7 +56,7 @@ if [ "$BDM_OS" != "osx" ]; then
   export PATH="$PYENV_ROOT/bin:$PATH"
   eval "$(pyenv init --path)"
   eval "$(pyenv init -)"
-  pyenv shell 3.9.1
+  pyenv shell 3.12.10
 fi
 set -e
 

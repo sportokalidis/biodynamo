@@ -60,7 +60,7 @@ eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
 pyenv update
 
-PYVERS=3.9.1
+PYVERS=3.12.10
 
 # If Python $PYVERS is not installed, install it
 if [ ! -f  "$HOME/.pyenv/versions/$PYVERS/lib/libpython3.so" ]; then

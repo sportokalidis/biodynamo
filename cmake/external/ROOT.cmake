@@ -73,16 +73,56 @@ if(APPLE)
 endif()
 set(ROOT_SHA ${${ROOT_SHA_KEY}})
 
-message(STATUS "Using  ROOT tarball    : ${ROOT_TAR_FILE}")
-message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}")
-message(STATUS "Using  ROOT SHA key    : ${ROOT_SHA_KEY}")
-message(STATUS "Verify ROOT SHA        : ${ROOT_SHA}")
+if(${DETECTED_OS_VERS} STREQUAL ubuntu-22.04)
+  # set(ROOT_SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/root")
+  set(ROOT_TARBALL "${ROOT_SOURCE_DIR}/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
 
-download_verify_extract(
-  http://cern.ch/biodynamo-lfs/third-party/${ROOT_TAR_FILE}
-  ${ROOT_SOURCE_DIR}
-  ${ROOT_SHA}
-)
+  # Make sure the destination exists
+  file(MAKE_DIRECTORY ${ROOT_SOURCE_DIR})
+
+  # Set the OneDrive direct download URL (ensure this actually works)
+  set(ROOT_URL "https://www.dropbox.com/scl/fi/x295fulj8uazjgohz8raw/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz?rlkey=smpjflpby9h7l8udzja83ag83&st=cw8z48wa&dl=1")
+
+  message(STATUS "Using  ROOT tarball    : ${ROOT_TARBALL}")
+  message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}")
+  message(STATUS "Using  ROOT SHA key    : ${ROOT_SHA_KEY}")
+  message(STATUS "Verify ROOT SHA        : ${ROOT_SHA}")
+
+  # Download the file
+  file(DOWNLOAD
+    "${ROOT_URL}"
+    "${ROOT_TARBALL}"
+    SHOW_PROGRESS
+    STATUS download_status
+    INACTIVITY_TIMEOUT 60
+  )
+
+  # Check for download success
+  list(GET download_status 0 status_code)
+  if(NOT status_code EQUAL 0)
+    message(FATAL_ERROR "Download failed: ${download_status}")
+  endif()
+
+  # Extract the tarball
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E tar xzf "${ROOT_TARBALL}"
+    WORKING_DIRECTORY "${ROOT_SOURCE_DIR}"
+  )
+else()
+
+  message(STATUS "Using  ROOT tarball    : ${ROOT_TAR_FILE}")
+  message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}")
+  message(STATUS "Using  ROOT SHA key    : ${ROOT_SHA_KEY}")
+  message(STATUS "Verify ROOT SHA        : ${ROOT_SHA}")
+
+  download_verify_extract(
+    http://cern.ch/biodynamo-lfs/third-party/${ROOT_TAR_FILE}
+    ${ROOT_SOURCE_DIR}
+    ${ROOT_SHA}
+  )
+endif()
+
+
 
 # Run again find_package in order to find ROOT
 find_package(ROOT COMPONENTS Geom Gui GenVector REQUIRED)

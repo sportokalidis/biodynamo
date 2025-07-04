@@ -211,8 +211,8 @@ if(NOPYENV)
          "is required in order to successfully use BioDynaMo.")      
    endif()
 else()
-   # Check if Python 3.9.1 from PyEnv is installed
-   set(pythonvers "3.9.1")
+   # Check if Python 3.12.10 from PyEnv is installed
+   set(pythonvers "3.12.10")
    find_package(Python ${pythonvers} EXACT COMPONENTS Interpreter Development)
    if (NOT Python_FOUND)
       message(FATAL_ERROR "We did not find the Python ${pythonvers} interpreter from PyEnv. "

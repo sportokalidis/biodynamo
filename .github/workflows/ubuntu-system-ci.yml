@@ -84,7 +84,7 @@ jobs:
       id: pyenv-cache
       with:
         path: ~/.pyenv
-        key: ${{ env.OSVERS }}-pyenv-3.9.1
+        key: ${{ env.OSVERS }}-pyenv-3.12.10
 
     - name: Install pyenv dependency
       if: steps.pyenv-cache.outputs.cache-hit != 'true'
@@ -95,10 +95,10 @@ jobs:
         export PATH="$HOME/.pyenv/bin:$PATH"
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
-        if [ ! -f  "$HOME/.pyenv/versions/3.9.1/lib/libpython3.so" ]; then
-          PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.9.1
+        if [ ! -f  "$HOME/.pyenv/versions/3.12.10/lib/libpython3.so" ]; then
+          PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.12.10
         fi
-        pyenv shell 3.9.1
+        pyenv shell 3.12.10
 
     - name: Cache Third Party Packages
       uses: actions/cache@v4
@@ -125,7 +125,7 @@ jobs:
         export PATH="$HOME/.pyenv/bin:$PATH"
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
-        pyenv shell 3.9.1
+        pyenv shell 3.12.10
         cmake \
           -Dnotebooks=ON \
           -Dsbml=OFF \
@@ -143,7 +143,7 @@ jobs:
         export PATH="$HOME/.pyenv/bin:$PATH"
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
-        pyenv shell 3.9.1
+        pyenv shell 3.12.10
         cmake \
           -Dnotebooks=OFF \
           -Dparaview=ON \
