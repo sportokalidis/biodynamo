@@ -139,6 +139,7 @@ option(cuda      "Enable CUDA code generation for GPU acceleration" OFF)
 option(opencl    "Enable OpenCL code generation for GPU acceleration" OFF)
 option(dict      "Build with ROOT dictionaries" ON)
 option(paraview  "Enable ParaView" ON)
+option(standalone_visualization "Enable standalone VTK-independent visualization export" ON)
 option(notebooks "Generate BioDynaMo notebooks" OFF)
 option(numa      "Enable NUMA-awareness in BioDynaMo." ON)
 option(sbml      "Enable SBML" OFF)
@@ -454,6 +455,12 @@ if(paraview)
     add_definitions("-DUSE_PARAVIEW")
 endif()
 
+# Standalone visualization configuration
+if(standalone_visualization)
+    add_definitions("-DUSE_STANDALONE_VISUALIZATION")
+    message("-- Standalone VTK-independent visualization export enabled")
+endif()
+
 if(sbml)
   if(APPLE)
     message(FATAL_ERROR "Currently SBML is not supported on MacOS (see https://trello.com/c/vKPbh4iG).")
@@ -654,6 +661,21 @@ if(paraview)
     # see: https://github.com/pytorch/pytorch/pull/3439/files
     SET_TARGET_PROPERTIES(VisualizationAdaptor PROPERTIES LINK_FLAGS "-dynamic")
   endif()
+endif()
+
+# Build standalone visualization (no ParaView dependency)
+if(standalone_visualization)
+  # Find standalone visualization sources and headers
+  file(GLOB_RECURSE STANDALONE_VIS_HEADERS "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.h")
+  file(GLOB_RECURSE STANDALONE_VIS_SOURCES "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.cc")
+  
+  # Add standalone adaptor sources
+  list(APPEND STANDALONE_VIS_HEADERS "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone_adaptor.h")
+  list(APPEND STANDALONE_VIS_SOURCES "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone_adaptor.cc")
+  
+  # Add standalone visualization sources to main library
+  list(APPEND LIB_SOURCES ${STANDALONE_VIS_SOURCES})
+  list(APPEND HEADERS ${STANDALONE_VIS_HEADERS})
 endif()
 
 if(${VTune_FOUND})
