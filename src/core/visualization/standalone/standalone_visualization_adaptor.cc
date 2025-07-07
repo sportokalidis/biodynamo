@@ -18,6 +18,12 @@
 #include <filesystem>
 #include <sstream>
 
+// macOS compatibility: prevent compiler optimization issues
+#ifdef __APPLE__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
+
 #include "core/agent/agent.h"
 #include "core/diffusion/diffusion_grid.h"
 #include "core/param/param.h"
@@ -27,6 +33,10 @@
 #include "core/util/log.h"
 #include "core/util/string.h"
 #include "core/util/thread_info.h"
+
+#ifdef __APPLE__
+#pragma clang diagnostic pop
+#endif
 
 namespace bdm {
 
@@ -54,7 +64,7 @@ void StandaloneVisualizationAdaptor::Initialize() {
   CreateDirectories(output_dir);
 
   initialized_ = true;
-  Log::Info("SimpleVisualizationAdaptor", "Initialized VTK-independent visualization export");
+  Log::Info("StandaloneVisualizationAdaptor", "Initialized VTK-independent visualization export");
 }
 
 // -----------------------------------------------------------------------------
@@ -63,7 +73,7 @@ void StandaloneVisualizationAdaptor::Finalize() {
     return;
   }
 
-  Log::Info("SimpleVisualizationAdaptor", "Finalized visualization export");
+  Log::Info("StandaloneVisualizationAdaptor", "Finalized visualization export");
 }
 
 // -----------------------------------------------------------------------------
@@ -80,7 +90,7 @@ void StandaloneVisualizationAdaptor::ExportVisualization(uint64_t step) {
     return;
   }
 
-  Log::Info("SimpleVisualizationAdaptor", "Exporting visualization for step ", step);
+  Log::Info("StandaloneVisualizationAdaptor", "Exporting visualization for step ", step);
 
   ExportAgents(step);
   ExportDiffusionGrids(step);
@@ -101,7 +111,10 @@ void StandaloneVisualizationAdaptor::ExportAgents(uint64_t step) {
   auto num_threads = tinfo->GetMaxThreads();
 
   // Export each agent type
-  for (const auto& [type_name, agents] : agents_by_type) {
+  for (const auto& agent_type_pair : agents_by_type) {
+    const std::string& type_name = agent_type_pair.first;
+    const std::vector<Agent*>& agents = agent_type_pair.second;
+    
     if (agents.empty()) {
       continue;
     }
@@ -212,7 +225,7 @@ void StandaloneVisualizationAdaptor::CreateDirectories(const std::string& path) 
   try {
     std::filesystem::create_directories(path);
   } catch (const std::exception& e) {
-    Log::Error("SimpleVisualizationAdaptor", "Failed to create directory: ", path, 
+    Log::Error("StandaloneVisualizationAdaptor", "Failed to create directory: ", path, 
                " Error: ", e.what());
   }
 }
