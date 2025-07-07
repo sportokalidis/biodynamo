@@ -1,9 +1,0 @@
-[visualization]
-export = true
-adaptor = "simple"
-interval = 10
-
-[simulation]
-time_step = 0.01
-max_displacement = 3.0
-bound_space = "open"
