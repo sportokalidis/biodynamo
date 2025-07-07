@@ -65,8 +65,8 @@ inline int Simulate(int argc, const char** argv) {
   // Run simulation for 100 steps
   simulation.GetScheduler()->Simulate(100);
   
-  std::cout << "Simulation completed!" << std::endl;
   std::cout << "Check the output directory for VTU files." << std::endl;
-  
+  std::cout << "Simulation completed successfully!\n";
+
   return 0;
 }
