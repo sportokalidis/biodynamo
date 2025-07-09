@@ -14,7 +14,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -24,6 +24,12 @@ jobs:
           echo "PYOPENSSL=python-openssl" >> $GITHUB_ENV
         fi
         if [ "${{ env.OSVERS }}" = "ubuntu-22.04" ]; then
+          echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
+        fi
+        if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
+          echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
+        fi
+        if [ "${{ env.OSVERS }}" = "debian-12" ]; then
           echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
         fi
         
@@ -125,4 +131,4 @@ jobs:
         cmake --build . --target show-format || true
         cmake --build . --target show-tidy || true
         cmake --build . --target check-cpplint || true
-      if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-20.04'
+      if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-22.04'
