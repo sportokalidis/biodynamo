@@ -519,6 +519,8 @@ endfunction()
 function(download_verify_extract URL DEST HASH)
   file(MAKE_DIRECTORY ${DEST})
   get_filename_component(TAR_FILENAME ${URL} NAME)
+#   set(TAR_FILENAME "${HASH}-${TAR_FILENAME}")
+  message("Downloading file ${TAR_FILENAME} from ${URL} to ${DEST}")
   get_filename_component(DEST_PARENT "${DEST}/.." ABSOLUTE)
   set(FULL_TAR_PATH "${DEST_PARENT}/${TAR_FILENAME}")
 
@@ -558,7 +560,7 @@ Unset the environment variable BDM_LOCAL_LFS to download the file.")
   file(WRITE ${DEST}/tar-sha256 "${HASH}")
 
   # remove tar file
-  file(REMOVE ${FULL_TAR_PATH})
+#   file(REMOVE ${FULL_TAR_PATH})
 endfunction()
 
 # Helper function to print a simple line

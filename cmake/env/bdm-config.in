@@ -95,6 +95,7 @@ cmakeinvoke="@cmakeinvoke@"
 configargs="@configargs@"
 omplibs="@omplibs@"
 fpprecision="@BDM_CONFIG_REALT@"
+pvversion="@CMAKE_BDM_PVVERSION@"
 
 ### BDM libraries ###
 
@@ -112,7 +113,7 @@ Usage: bdm-config [--version] [--root-version]\
  [--debug] [--opt] [--cxxflags] [--cxxincludes]\
  [--ldflags] [--libs] [--bindir] [--libdir] [--incdir]\
  [--cxx] [--ld ] [--cmakedir] [--cmake-invoke] [--config]\
- [--arch] [--platform] [--ncpu] [--fp-precision] [--help]"
+ [--arch] [--platform] [--ncpu] [--fp-precision] [--pv-version] [--help]"
 
 if test $# -eq 0; then
    echo "${usage}" 1>&2
@@ -249,6 +250,10 @@ while test $# -gt 0; do
       ### output floating-point precision of BioDynaMo
       out="$out $fpprecision"
       ;;
+    --pv-version)
+      ### output ParaView version used to build BioDynaMo
+      out="$out $pvversion"
+      ;;
     --help)
       ### Print a help message
       echo "Usage: `basename $0` [options]"
@@ -273,6 +278,7 @@ while test $# -gt 0; do
       echo "  --cxx                 Print alternative C++ compiler specified when BDM was built"
       echo "  --ld                  Print alternative Linker specified when BDM was built"
       echo "  --fp-precision        Print the floating-point precision that  BDM was built with"
+      echo "  --pv-version          Print the ParaView version that BioDynaMo was built with"
       echo "  --help                Print this message"
       exit 0
       ;;

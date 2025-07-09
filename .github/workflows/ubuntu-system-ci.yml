@@ -21,7 +21,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -100,11 +100,11 @@ jobs:
         fi
         pyenv shell 3.9.1
 
-    - name: Cache Third Party Packages
-      uses: actions/cache@v4
-      with:
-        path: build/third_party
-        key: ${{ env.OSVERS }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
+    # - name: Cache Third Party Packages
+    #   uses: actions/cache@v4
+    #   with:
+    #     path: build/third_party
+    #     key: ${{ env.OSVERS }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
 
     # Set floating point precision
     - name: Set floating-point-precision
@@ -113,6 +113,9 @@ jobs:
           echo "REALT=float" >> $GITHUB_ENV
         fi
         if [ "${{ env.OSVERS }}" = "ubuntu-22.04" ]; then
+          echo "REALT=double" >> $GITHUB_ENV
+        fi
+        if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
           echo "REALT=double" >> $GITHUB_ENV
         fi
 
