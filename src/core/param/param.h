@@ -290,7 +290,13 @@ struct Param {
   ///
   ///     [visualization]
   ///     adaptor = <name_of_adaptor>
+#ifdef USE_PARAVIEW
   std::string visualization_engine = "paraview";
+#elif defined(USE_STANDALONE_VISUALIZATION)
+  std::string visualization_engine = "standalone";
+#else
+  std::string visualization_engine = "";
+#endif
 
   /// Use ParaView Catalyst for insitu visualization.\n
   /// Insitu visualization supports live visualization

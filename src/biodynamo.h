@@ -49,4 +49,11 @@
 #include "core/util/vtune.h"
 #include "core/visualization/root/notebook_util.h"
 
+#ifdef USE_STANDALONE_VISUALIZATION
+#include "core/visualization/standalone_adaptor.h"
+#include "core/visualization/standalone/standalone_visualization_adaptor.h"
+#include "core/visualization/standalone/vtk_independent_vtu_writer.h"
+#include "core/visualization/standalone/vtk_independent_vti_writer.h"
+#endif
+
 #endif  // BIODYNAMO_H_

@@ -32,13 +32,14 @@ sudo apt-get update
 sudo apt-get install apt-transport-https
 
 # Add ppa for newer CMake version
-#wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | sudo apt-key add -
-#CODENAME=$(grep -oP '(?<=^UBUNTU_CODENAME=).+' /etc/os-release | tr -d '"')
-#REPO="deb https://apt.kitware.com/ubuntu/ ${CODENAME} main"
-#sudo apt-add-repository "$REPO"
+wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | sudo apt-key add -
+CODENAME=$(grep -oP '(?<=^UBUNTU_CODENAME=).+' /etc/os-release | tr -d '"')
+REPO="deb https://apt.kitware.com/ubuntu/ ${CODENAME} main"
+sudo apt-add-repository "$REPO"
 
 # Update
 sudo apt-get update
+sudo apt install -y cmake-data=3.22.1-1ubuntu1.22.04.1
 
 CMAKE_VER=3.19.3
 CMAKE_SH="cmake-${CMAKE_VER}-linux-x86_64.sh"
@@ -49,9 +50,7 @@ rm "${CMAKE_SH}"
 
 # Install required packages
 sudo apt-get install -y \
-  $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-22.04/package_list_required)
-
-
+  $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-24.04/package_list_required)
 
 if [ -n "${PYENV_ROOT}" ]; then
   unset PYENV_ROOT
@@ -81,10 +80,10 @@ pyenv shell $PYVERS
 # Install optional packages
 if [ $1 == "all" ]; then
   # Don't install --user: the packages should end up in the PYENV_ROOT directory
-  python -m pip install -r $BDM_PROJECT_DIR/util/installation/ubuntu-22.04/pip_packages.txt
+  python -m pip install -r $BDM_PROJECT_DIR/util/installation/ubuntu-24.04/pip_packages.txt
 
   sudo apt-get install -y \
-    $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-22.04/package_list_extra)
+    $(cat $BDM_PROJECT_DIR/util/installation/ubuntu-24.04/package_list_extra)
 fi
 
 exit 0

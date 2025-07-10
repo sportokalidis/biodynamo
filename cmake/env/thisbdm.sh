@@ -253,6 +253,14 @@ _source_thisbdm()
   local bdm_pv_version='5.9'
   if [ "$(uname)" = 'Darwin' ]; then
     bdm_pv_version='5.10'
+  else
+    # For Linux, check if it's Ubuntu 24.04
+    if [ -f /etc/os-release ]; then
+      local ubuntu_version=$(grep '^VERSION_ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"' 2>/dev/null)
+      if [ "$ubuntu_version" = '24.04' ]; then
+        bdm_pv_version='5.13'
+      fi
+    fi
   fi
 
   # Clear the env from previously set ParaView and Qt paths.

@@ -20,6 +20,10 @@
 #include "core/util/log.h"
 #include "core/visualization/visualization_adaptor.h"
 
+#ifdef USE_STANDALONE_VISUALIZATION
+#include "core/visualization/standalone_adaptor.h"
+#endif
+
 #include "TInterpreter.h"
 #include "TPluginManager.h"
 #include "TROOT.h"
@@ -37,6 +41,26 @@ VisualizationAdaptor *VisualizationAdaptor::Create(const std::string &adaptor) {
   if (!(param->insitu_visualization || param->export_visualization)) {
     return nullptr;
   }
+
+#ifdef USE_STANDALONE_VISUALIZATION
+  // If standalone visualization is enabled and adaptor is "paraview" but ParaView is not available,
+  // use the standalone adaptor instead
+  if (adaptor == "paraview") {
+#ifndef USE_PARAVIEW
+    Log::Info("VisualizationAdaptor::Create", 
+              "ParaView not available, using standalone VTK-independent visualization");
+    return new StandaloneAdaptor();
+#endif
+  }
+  
+  // If standalone visualization is enabled and specifically requested
+  if (adaptor == "standalone") {
+    Log::Info("VisualizationAdaptor::Create", 
+              "Using standalone VTK-independent visualization");
+    return new StandaloneAdaptor();
+  }
+#endif
+
   VisualizationAdaptor *va = nullptr;
   bool first_try = !loaded_.count(adaptor);
   // If this is the first time we try to load `adaptor`

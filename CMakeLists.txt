@@ -139,6 +139,7 @@ option(cuda      "Enable CUDA code generation for GPU acceleration" OFF)
 option(opencl    "Enable OpenCL code generation for GPU acceleration" OFF)
 option(dict      "Build with ROOT dictionaries" ON)
 option(paraview  "Enable ParaView" ON)
+option(standalone_visualization "Enable standalone VTK-independent visualization export" ON)
 option(notebooks "Generate BioDynaMo notebooks" OFF)
 option(numa      "Enable NUMA-awareness in BioDynaMo." ON)
 option(sbml      "Enable SBML" OFF)
@@ -165,9 +166,33 @@ if(APPLE)
 endif()
 
 if(UNIX AND NOT APPLE)
-  set(CMAKE_BDM_PVVERSION "5.9")
+  execute_process(
+    COMMAND lsb_release -rs
+    OUTPUT_VARIABLE UBUNTU_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  
+  message(STATUS "Detected Ubuntu version: ${UBUNTU_VERSION}")
+
+  if("${UBUNTU_VERSION}" VERSION_EQUAL "22.04")
+    set(CMAKE_BDM_PVVERSION "5.9")
+    message(STATUS "Setting ParaView version to 5.9 for Ubuntu 22.04")
+  elseif("${UBUNTU_VERSION}" VERSION_EQUAL "24.04")
+    set(CMAKE_BDM_PVVERSION "5.13")
+    message(STATUS "Setting ParaView version to 5.13 for Ubuntu 24.04")
+  else()
+    message(WARNING "Unsupported Ubuntu version: ${UBUNTU_VERSION}. Defaulting to ParaView 5.9.")
+    set(CMAKE_BDM_PVVERSION "5.9")
+  endif()
+
   set(LINUX TRUE)
   add_definitions("-DLINUX")
+endif()
+
+# Ensure CMAKE_BDM_PVVERSION is always set with a fallback value
+if(NOT DEFINED CMAKE_BDM_PVVERSION)
+  set(CMAKE_BDM_PVVERSION "5.9")
 endif()
 
 set(CMAKE_VISIBILITY_INLINES_HIDDEN "ON")
@@ -344,6 +369,8 @@ if(numa)
 endif()
 
 if(paraview)
+    find_package(OpenGL REQUIRED)
+    find_package(X11 REQUIRED)
     # If we specify a custom location for ParaView then we need to specify also a custom location for Qt.
     if ((DEFINED ENV{ParaView_DIR} AND NOT DEFINED ENV{Qt5_DIR}) OR (NOT DEFINED ENV{ParaView_DIR} AND DEFINED ENV{Qt5_DIR}))
         MESSAGE(FATAL_ERROR "\nFATAL ERROR \nYou need to specify both ParaView_DIR and Qt5_DIR in order to build "
@@ -426,6 +453,12 @@ if(paraview)
 
     include_directories(${ParaView_PREFIX_PATH}/include/paraview-${CMAKE_BDM_PVVERSION})
     add_definitions("-DUSE_PARAVIEW")
+endif()
+
+# Standalone visualization configuration
+if(standalone_visualization)
+    add_definitions("-DUSE_STANDALONE_VISUALIZATION")
+    message("-- Standalone VTK-independent visualization export enabled")
 endif()
 
 if(sbml)
@@ -628,6 +661,21 @@ if(paraview)
     # see: https://github.com/pytorch/pytorch/pull/3439/files
     SET_TARGET_PROPERTIES(VisualizationAdaptor PROPERTIES LINK_FLAGS "-dynamic")
   endif()
+endif()
+
+# Build standalone visualization (no ParaView dependency)
+if(standalone_visualization)
+  # Find standalone visualization sources and headers
+  file(GLOB_RECURSE STANDALONE_VIS_HEADERS "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.h")
+  file(GLOB_RECURSE STANDALONE_VIS_SOURCES "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.cc")
+  
+  # Add standalone adaptor sources
+  list(APPEND STANDALONE_VIS_HEADERS "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone_adaptor.h")
+  list(APPEND STANDALONE_VIS_SOURCES "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone_adaptor.cc")
+  
+  # Add standalone visualization sources to main library
+  list(APPEND LIB_SOURCES ${STANDALONE_VIS_SOURCES})
+  list(APPEND HEADERS ${STANDALONE_VIS_HEADERS})
 endif()
 
 if(${VTune_FOUND})
