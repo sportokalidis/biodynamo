@@ -58,11 +58,41 @@ CXX_INCLUDES=$(${BDM_CONFIG} --cxxincludes | sed 's|-isystem |-I|g')
 
 CXX_DEFINES=$(${BDM_CONFIG} --cxxdefines)
 
+paraview_version_raw=$(${BDM_CONFIG} --pv-version)
+echo "DEBUG: Raw output from bdm-config --pv-version: '$paraview_version_raw'"
+
+# Remove any extra text and get just the version number
+paraview_version=$(echo "$paraview_version_raw" | sed 's/.*: *//' | tr -d '\n' | tr -d ' ')
+echo "DEBUG: Cleaned paraview_version: '$paraview_version'"
+
+# If version is empty, "None", or contains @CMAKE, try to determine from system
+if [ -z "$paraview_version" ] || [ "$paraview_version" = "None" ] || [[ "$paraview_version" == *"@CMAKE"* ]]; then
+  # Try to detect based on OS
+  if [ "$(uname)" = "Darwin" ]; then
+    paraview_version="5.10"
+  else
+    # For Linux, try to detect Ubuntu version
+    if command -v lsb_release >/dev/null 2>&1; then
+      ubuntu_version=$(lsb_release -rs 2>/dev/null)
+      case "$ubuntu_version" in
+        "22.04") paraview_version="5.9" ;;
+        "24.04") paraview_version="5.13" ;;
+        *) paraview_version="5.9" ;;
+      esac
+    else
+      paraview_version="5.9"
+    fi
+  fi
+  echo "Warning: Could not determine ParaView version from bdm-config, detected system: $(uname), using: ${paraview_version}"
+else
+  echo "Using ParaView version: ${paraview_version}"
+fi
+
 genreflex ${HEADERS} -o ${DICT} --noIncludePaths --select=${SELECTIONFILE} ${CXX_DEFINES} ${CXX_INCLUDES} $ADDITIONAL_CXX_FLAGS
 
 # Generate bdm dictionary and append to DICT
 BDM_DICT=$(mktemp)
-bdm-dictionary --output $BDM_DICT --out-of-source --include-dirs $INCLUDE_DIRS --headers $HEADERS
+bdm-dictionary --output $BDM_DICT --out-of-source --include-dirs $INCLUDE_DIRS --headers $HEADERS --pvversion $paraview_version
 echo "" >> $DICT
 echo "// -------------------------------------------------------------------" >> $DICT
 echo "// Start BioDynaMo dictionary" >> $DICT
