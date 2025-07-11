@@ -102,13 +102,13 @@ curl https://pyenv.run | bash
 export PATH="$HOME/.pyenv/bin:$PATH"
 eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
-PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.12.10
+PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.9.1
 ```
 
 #### Optional Packages
 
 ```bash
-pyenv shell 3.12.10
+pyenv shell 3.9.1
 python -m pip install markupsafe==2.0.1 jupyter metakernel jupyterlab nbformat==5.4.0 nbconvert==6.5.3 nbclient==0.6.6
 sudo apt-get install -y valgrind \
   clang-format clang-tidy \
@@ -190,13 +190,13 @@ curl https://pyenv.run | bash
 export PATH="$HOME/.pyenv/bin:$PATH"
 eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
-PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.12.10
+PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.9.1
 ```
 
 #### Optional Packages
 
 ```bash
-pyenv shell 3.12.10
+pyenv shell 3.9.1
 python -m pip install markupsafe==2.0.1 nbformat jupyter metakernel jupyterlab nbformat==5.4.0 nbconvert==6.5.3 nbclient==0.6.6
 # SBML integration
 sudo bash -c 'cat << EOF  > /etc/yum.repos.d/springdale-7-SCL.repo
