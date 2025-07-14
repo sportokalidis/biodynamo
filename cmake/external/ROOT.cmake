@@ -76,18 +76,18 @@ endif()
 set(ROOT_SHA ${${ROOT_SHA_KEY}})
 
 if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
-  message(STATUS "Using  ParaView tarball: root_v6.36.02.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
+  message(STATUS "Using  ParaView tarball: root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
   message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}")
   message(STATUS "Using  ROOT SHA key    : ${ROOT_SHA_KEY}")
   message(STATUS "Verify ROOT SHA        : ${ROOT_SHA}")
 
-  set(ROOT_TARBALL "${ROOT_SOURCE_DIR}/root_v6.36.02.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
+  set(ROOT_TARBALL "${ROOT_SOURCE_DIR}/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
 
   # Make sure the destination exists
   file(MAKE_DIRECTORY ${ROOT_SOURCE_DIR})
 
   # Set the OneDrive direct download URL (ensure this actually works)
-  set(ROOT_URL "https://root.cern/download/root_v6.36.02.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
+  set(ROOT_URL "https://root.cern/download/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
 
   # Download the file
   file(DOWNLOAD
