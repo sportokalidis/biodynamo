@@ -1,7 +1,7 @@
 include(utils)
 
 # Directory in which ROOT will be downloaded
-SET(ROOT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/root")
+SET(ROOT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/")
 
 set(ROOT_TAR_FILE root_v6.30.02_cxx17_python3.9_${DETECTED_OS_VERS}.tar.gz)
 set(ROOT_SHA_KEY ${DETECTED_OS_VERS}-ROOT)
@@ -76,18 +76,18 @@ endif()
 set(ROOT_SHA ${${ROOT_SHA_KEY}})
 
 if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
-  message(STATUS "Using  ParaView tarball: root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
+  message(STATUS "Using  ParaView tarball: root_v6.36.02.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
   message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}")
   message(STATUS "Using  ROOT SHA key    : ${ROOT_SHA_KEY}")
   message(STATUS "Verify ROOT SHA        : ${ROOT_SHA}")
 
-  set(ROOT_TARBALL "${ROOT_SOURCE_DIR}/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
+  set(ROOT_TARBALL "${ROOT_SOURCE_DIR}/root_v6.36.02.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
 
   # Make sure the destination exists
   file(MAKE_DIRECTORY ${ROOT_SOURCE_DIR})
 
   # Set the OneDrive direct download URL (ensure this actually works)
-  set(ROOT_URL "https://www.dropbox.com/scl/fi/x295fulj8uazjgohz8raw/root_v6.32.14.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz?rlkey=smpjflpby9h7l8udzja83ag83&st=ajzu2zkz&dl=1")
+  set(ROOT_URL "https://root.cern/download/root_v6.36.02.Linux-ubuntu24.04-x86_64-gcc13.3.tar.gz")
 
   # Download the file
   file(DOWNLOAD
@@ -112,13 +112,13 @@ if(${DETECTED_OS_VERS} STREQUAL ubuntu-24.04)
 
 else()
   message(STATUS "Using  ROOT tarball    : ${ROOT_TAR_FILE}")
-  message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}")
+  message(STATUS "Using  ROOT source dir : ${ROOT_SOURCE_DIR}/root")
   message(STATUS "Using  ROOT SHA key    : ${ROOT_SHA_KEY}")
   message(STATUS "Verify ROOT SHA        : ${ROOT_SHA}")
 
   download_verify_extract(
     http://cern.ch/biodynamo-lfs/third-party/${ROOT_TAR_FILE}
-    ${ROOT_SOURCE_DIR}
+    ${ROOT_SOURCE_DIR}/root
     ${ROOT_SHA}
   )
 endif()
