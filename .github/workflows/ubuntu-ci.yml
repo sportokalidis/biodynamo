@@ -36,7 +36,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libopenmpi-dev libomp5 libomp-dev libnuma-dev freeglut3-dev \
           libreadline-dev libsqlite3-dev tk-dev ${{ env.PYOPENSSL }} ninja-build libblas-dev liblapack-dev libgit2-dev \
-          libtbb-dev libtbb12 libtbbbind-2-5 libtbbmalloc2
+          libtbb-dev libtbb12
+        if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
+          sudo apt-get install -y libtbbbind-2-5 libtbbmalloc2
+        fi
         curl -L -O https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh
         chmod +x cmake-3.19.3-Linux-x86_64.sh
         sudo ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix=/usr/local
@@ -93,7 +96,7 @@ jobs:
         echo "Debug: OS detection check:"
         cat /etc/os-release | grep -E "(^ID=|^VERSION_ID=)"
         echo "Debug: TBB packages installed:"
-        dpkg -l | grep -i tbb || echo "No TBB packages found"
+        dpkg -l | grep -E "(libtbb-dev|libtbb12)" || echo "No TBB packages found"
         
         cmake -G Ninja \
           -Dparaview=ON \
