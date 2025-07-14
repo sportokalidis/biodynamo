@@ -18,15 +18,16 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Set python openssl package
+    - name: Set OS version and python openssl package
       run: |
-        if [ "${{ env.OSVERS }}" = "ubuntu-20.04" ]; then
+        echo "OSVERS=${{ matrix.os }}" >> $GITHUB_ENV
+        if [ "${{ matrix.os }}" = "ubuntu-20.04" ]; then
           echo "PYOPENSSL=python-openssl" >> $GITHUB_ENV
         fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-22.04" ]; then
+        if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
           echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
         fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
+        if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
           echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
         fi
         
@@ -34,7 +35,8 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libopenmpi-dev libomp5 libomp-dev libnuma-dev freeglut3-dev \
-          libreadline-dev libsqlite3-dev tk-dev ${{ env.PYOPENSSL }} ninja-build libblas-dev liblapack-dev libgit2-dev
+          libreadline-dev libsqlite3-dev tk-dev ${{ env.PYOPENSSL }} ninja-build libblas-dev liblapack-dev libgit2-dev \
+          libtbb-dev libtbb12 libtbbbind-2-5 libtbbmalloc2
         curl -L -O https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh
         chmod +x cmake-3.19.3-Linux-x86_64.sh
         sudo ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix=/usr/local
@@ -48,18 +50,12 @@ jobs:
         disown -ar
         sleep 3
 
-    - name: Set OSVERS
-      run: |
-        ID=$(grep -oP '(?<=^ID=).+' /etc/os-release | tr -d '"')
-        VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
-        echo "OSVERS=$ID-$VERSION" >> $GITHUB_ENV
-
     - name: Cache pyenv
       uses: actions/cache@v4
       id: pyenv-cache
       with:
         path: ~/.pyenv
-        key: ${{ env.OSVERS }}-pyenv-3.9.1
+        key: ${{ matrix.os }}-pyenv-3.9.1
 
     - name: Install pyenv dependency
       if: steps.pyenv-cache.outputs.cache-hit != 'true'
@@ -78,11 +74,11 @@ jobs:
       with:
         fetch-depth: 0
 
-    # - name: Cache Third Party Packages
-    #   uses: actions/cache@v4
-    #   with:
-    #     path: build/third_party
-    #     key: ${{ env.OSVERS }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
+    - name: Cache Third Party Packages
+      uses: actions/cache@v4
+      with:
+        path: build/third_party
+        key: ${{ matrix.os }}-third-party-v2-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
 
     - name: Build BioDynaMo
       shell: bash
@@ -91,12 +87,25 @@ jobs:
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
         pyenv shell 3.9.1
+        
+        # Debug: Check OS detection and TBB installation
+        echo "Debug: OSVERS environment variable: $OSVERS"
+        echo "Debug: OS detection check:"
+        cat /etc/os-release | grep -E "(^ID=|^VERSION_ID=)"
+        echo "Debug: TBB packages installed:"
+        dpkg -l | grep -i tbb || echo "No TBB packages found"
+        
         cmake -G Ninja \
           -Dparaview=ON \
           -Dbenchmark=ON \
           -Dlibgit2=ON \
           -DCMAKE_BUILD_TYPE=Release \
+          -DOS=$OSVERS \
           -B build
+        echo "Debug: Checking what ROOT version was selected during cmake:"
+        grep -E "(ROOT|root)" build/CMakeCache.txt | head -10 || true
+        echo "Debug: Checking if TBB libraries are accessible:"
+        find build/third_party -name "*tbb*" 2>/dev/null || echo "No TBB files found in third_party"
         cmake --build build --parallel --config Release
 
     - name: Unit tests BioDynaMo
