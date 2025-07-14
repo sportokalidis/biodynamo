@@ -91,12 +91,21 @@ jobs:
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
         pyenv shell 3.9.1
+        
+        # Debug: Check OS detection
+        echo "Debug: OSVERS environment variable: $OSVERS"
+        echo "Debug: OS detection check:"
+        cat /etc/os-release | grep -E "(^ID=|^VERSION_ID=)"
+        
         cmake -G Ninja \
           -Dparaview=ON \
           -Dbenchmark=ON \
           -Dlibgit2=ON \
           -DCMAKE_BUILD_TYPE=Release \
+          -DOS=$OSVERS \
           -B build
+        echo "Debug: Checking what ROOT version was selected during cmake:"
+        grep -i "root" build/CMakeCache.txt | head -10 || true
         cmake --build build --parallel --config Release
 
     - name: Unit tests BioDynaMo
