@@ -112,6 +112,14 @@ jobs:
       shell: bash
       working-directory: build
       run: |
+        # For Ubuntu 24.04, ensure cling can find the correct compiler
+        if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
+          # Create symlink so cling can find x86_64-linux-gnu-g++-11 (pointing to g++-13)
+          sudo ln -sf /usr/bin/x86_64-linux-gnu-g++-13 /usr/bin/x86_64-linux-gnu-g++-11 || true
+          sudo ln -sf /usr/bin/x86_64-linux-gnu-gcc-13 /usr/bin/x86_64-linux-gnu-gcc-11 || true
+          echo "Created symlinks for cling compatibility:"
+          ls -la /usr/bin/x86_64-linux-gnu-g++* | head -5
+        fi
         . bin/thisbdm.sh
         bdm config
         export DISPLAY=:99.0
