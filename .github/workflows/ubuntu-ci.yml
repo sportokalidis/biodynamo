@@ -73,11 +73,11 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Cache Third Party Packages
-      uses: actions/cache@v4
-      with:
-        path: build/third_party
-        key: ${{ matrix.os }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
+    # - name: Cache Third Party Packages
+    #   uses: actions/cache@v4
+    #   with:
+    #     path: build/third_party
+    #     key: ${{ matrix.os }}-third-party-v2-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
 
     - name: Build BioDynaMo
       shell: bash
@@ -91,6 +91,7 @@ jobs:
         echo "Debug: OSVERS environment variable: $OSVERS"
         echo "Debug: OS detection check:"
         cat /etc/os-release | grep -E "(^ID=|^VERSION_ID=)"
+        echo "Debug: Expected ROOT version for $OSVERS: ROOT 6.36.02 (gcc-13)"
         
         cmake -G Ninja \
           -Dparaview=ON \
@@ -99,8 +100,10 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DOS=$OSVERS \
           -B build
-        echo "Debug: Checking what ROOT version was selected during cmake:"
-        grep -i "root" build/CMakeCache.txt | head -10 || true
+        echo "Debug: Checking what ROOT version was actually selected during cmake:"
+        grep -E "(ROOT|root)" build/CMakeCache.txt | head -10 || true
+        echo "Debug: Checking if ROOT 6.36.02 tarball exists:"
+        ls -la build/third_party/ | grep -i root || echo "No ROOT files found"
         cmake --build build --parallel --config Release
 
     - name: Unit tests BioDynaMo
