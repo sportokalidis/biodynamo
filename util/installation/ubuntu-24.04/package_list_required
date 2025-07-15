@@ -2,8 +2,6 @@ curl
 freeglut3-dev
 g++
 gcc
-g++-11
-gcc-11
 git
 libblas-dev
 libbz2-dev
@@ -23,6 +21,8 @@ liblzma-dev
 libreadline-dev
 libsqlite3-dev
 libssl-dev
+libtbb-dev
+libtbb12
 python3-openssl
 tk-dev
 xz-utils
