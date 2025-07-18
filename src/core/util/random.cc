@@ -13,6 +13,10 @@
 // -----------------------------------------------------------------------------
 
 #include "core/util/random.h"
+
+// Only compile original ROOT-based implementation if not using std random
+#if !BDM_USE_STD_RANDOM
+
 #include <TF1.h>
 #include <TF2.h>
 #include <TF3.h>
@@ -367,3 +371,5 @@ int PoissonRng::SampleImpl(TRandom* rng) { return rng->Poisson(mean_); }
 PoissonRng Random::GetPoissonRng(real_t mean) const { return PoissonRng(mean); }
 
 }  // namespace bdm
+
+#endif  // !BDM_USE_STD_RANDOM

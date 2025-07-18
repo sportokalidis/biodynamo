@@ -20,6 +20,12 @@
 #include "core/container/math_array.h"
 #include "core/util/root.h"
 
+// Check if we should use standard C++ random instead of ROOT
+#include "core/util/random_compat.h"
+
+#if !BDM_USE_STD_RANDOM
+// Original ROOT-based implementation
+
 class TRandom;
 class TF1;
 class TF2;
@@ -436,5 +442,7 @@ class Random {
 };
 
 }  // namespace bdm
+
+#endif  // !BDM_USE_STD_RANDOM
 
 #endif  // CORE_UTIL_RANDOM_H_
