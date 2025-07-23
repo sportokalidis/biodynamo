@@ -1,0 +1,24 @@
+# Configuration file for radiation necrosis simulation
+
+# Visualization with slower time progression
+[visualization]
+export = true
+interval = 5  # Save every 5 steps for better temporal resolution
+export_generate_pvsm = true
+
+[[visualize_agent]]
+name = "RadiationCell"
+
+[simulation]
+# Slower, more realistic simulation parameters
+time_step = 1.0              # Each step = 1 time unit (e.g., 1 hour)
+max_displacement = 3.0       # Reduced cell movement per step
+bound_space = "closed"
+min_bound = 0
+max_bound = 100
+simulation_time_step = 0.01  # Internal computation time step
+detect_static_agents = true
+
+[performance]
+# Performance settings
+detect_static_agents = false

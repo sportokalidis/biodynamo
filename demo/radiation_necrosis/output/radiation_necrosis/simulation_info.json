@@ -1,0 +1,18 @@
+{
+  "simulation": {
+    "name":"radiation_necrosis",
+    "result_dir":"output/radiation_necrosis"
+  },
+  "agents": [
+    {
+      "name":"RadiationCell",
+      "glyph":"Glyph",
+      "shape":"Sphere",
+      "scaling_attribute":"diameter_"
+    }
+  ],
+  "extracellular_substances": [
+
+  ],
+  "insitu_script_arguments": ""
+}
