@@ -177,20 +177,13 @@ class CompartmentalModel : public Behavior {
         break;
         
       case kHealthyBrain:
-        // ENHANCED brain tissue radiosensitivity - make necrosis clearly visible
-        if (sim->GetRandom()->Uniform() < 0.85) { // 85% of brain cells damaged!
+        // Healthy brain cells are more radiosensitive
+        if (sim->GetRandom()->Uniform() < 0.4) {
           cell->SetCellType(kDamagedBrain);
           cell->SetDamageLevel(0.9);
           // Trigger VEGF and HIF-1α expression (paper's key finding)
-          cell->SetVEGFExpression(0.8);
-          cell->SetHIF1AlphaLevel(0.9);
-          // Make visually smaller for clear distinction
-          cell->SetDiameter(8.0); // Smaller than healthy (12.0)
-        }
-        // IMMEDIATE brain tissue necrosis for clear visualization
-        if (sim->GetRandom()->Uniform() < 0.35) { // 35% immediate necrosis!
-          cell->SetCellType(kNecroticCell);
-          cell->SetDiameter(4.0); // Very small necrotic cells
+          cell->SetVEGFExpression(0.7);
+          cell->SetHIF1AlphaLevel(0.8);
         }
         break;
         
@@ -222,48 +215,24 @@ class CompartmentalModel : public Behavior {
   }
   
   void ApplyNecroticAccumulation(RadiationCell* cell, Simulation* sim, uint64_t step) {
-    // Enhanced necrotic development for clear brain tissue necrosis visualization
+    // Paper's equation: dN/dt = H(t) - λN * I * N
     auto* random = sim->GetRandom();
     
-    if (cell->GetCellType() == kDamagedBrain) {
-      // MUCH HIGHER necrosis rate for damaged brain cells - progressive RN
-      double time_factor = std::min(1.0, step * 0.005); // Increases over time
-      double H_t = 0.25 + time_factor; // Much higher base rate for brain
-      double lambda_N = 0.005; // Very low clearance - necrosis accumulates
-      
-      // Brain tissue necrosis progresses faster than tumor
-      double necrosis_prob = H_t - (lambda_N * 0.3 * cell->GetDamageLevel());
-      
-      if (random->Uniform() < std::max(0.0, necrosis_prob)) {
-        cell->SetCellType(kNecroticCell);
-        cell->SetDiameter(3.0); // Very small for clear visualization
-        // Increase VEGF/HIF-1α expression as per paper's findings
-        cell->SetVEGFExpression(std::min(1.0, cell->GetVEGFExpression() + 0.4));
-        cell->SetHIF1AlphaLevel(std::min(1.0, cell->GetHIF1AlphaLevel() + 0.5));
-      }
-    }
-    
-    if (cell->GetCellType() == kDamagedTumor) {
-      double H_t = 0.15; // Lower rate for tumor
+    if (cell->GetCellType() == kDamagedBrain || cell->GetCellType() == kDamagedTumor) {
+      double H_t = 0.05; // Input of damaged cells becoming necrotic
       double lambda_N = 0.02; // Necrotic clearance rate by immune cells
       
-      double necrosis_prob = H_t - (lambda_N * 0.5);
+      // Check for nearby immune cells (simplified spatial interaction)
+      double immune_presence = 0.5; // Simplified - would need neighbor search in full model
+      
+      // Probability of becoming necrotic
+      double necrosis_prob = H_t - (lambda_N * immune_presence * cell->GetDamageLevel());
       
       if (random->Uniform() < std::max(0.0, necrosis_prob)) {
         cell->SetCellType(kNecroticCell);
-        cell->SetDiameter(5.0); // Larger than brain necrosis for distinction
+        // Increase VEGF/HIF-1α expression as per paper's findings
         cell->SetVEGFExpression(std::min(1.0, cell->GetVEGFExpression() + 0.2));
         cell->SetHIF1AlphaLevel(std::min(1.0, cell->GetHIF1AlphaLevel() + 0.3));
-      }
-    }
-    
-    // SECONDARY BRAIN NECROSIS - healthy cells near necrotic regions
-    if (cell->GetCellType() == kHealthyBrain && step > 20) {
-      double spread_prob = (step - 20) * 0.003; // Progressive spreading necrosis
-      if (random->Uniform() < spread_prob) {
-        cell->SetCellType(kDamagedBrain);
-        cell->SetDamageLevel(0.8);
-        cell->SetDiameter(8.0); // Smaller for visibility
       }
     }
   }
@@ -384,7 +353,7 @@ inline int Simulate(int argc, const char** argv) {
   std::vector<double> lesion_volumes;
   std::vector<double> timepoints;
   
-  for (int step = 0; step < 5000; ++step) {
+  for (int step = 0; step < 200; ++step) {
     simulation.GetScheduler()->Simulate(1);
     
     // Track lesion volume every 10 steps for growth exponent β

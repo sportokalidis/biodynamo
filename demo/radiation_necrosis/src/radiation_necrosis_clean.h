@@ -132,7 +132,7 @@ class RadiationCell : public Cell {
   uint64_t birth_step_ = 0;           // When cell was created
 };
 
-// Simplified Compartmental Model - implements paper's differential equations
+// Compartmental Model Behavior - implements paper's differential equations
 class CompartmentalModel : public Behavior {
   BDM_BEHAVIOR_HEADER(CompartmentalModel, Behavior, 1);
 
@@ -146,8 +146,9 @@ class CompartmentalModel : public Behavior {
     auto current_step = sim->GetScheduler()->GetSimulatedSteps();
     
     // Apply SRS treatment at initial step
-    if (current_step == 1) {
+    if (current_step == 1 && !treatment_applied_) {
       ApplySRSTreatment(cell, sim);
+      treatment_applied_ = true;
     }
     
     // Apply compartmental model equations from paper
@@ -159,38 +160,31 @@ class CompartmentalModel : public Behavior {
   }
 
  private:
+  bool treatment_applied_ = false;
+  
   void ApplySRSTreatment(RadiationCell* cell, Simulation* sim) {
     // Stereotactic radiosurgery causes immediate cellular damage
     CellType type = cell->GetCellType();
     
     switch (type) {
       case kProliferatingTumor:
-        // Enhanced tumor response to SRS - better tumor control
-        if (sim->GetRandom()->Uniform() < 0.75) { // 75% become damaged (up from 60%)
+        // Some tumor cells become damaged, others die
+        if (sim->GetRandom()->Uniform() < 0.6) {
           cell->SetCellType(kDamagedTumor);
-          cell->SetDamageLevel(0.9); // Higher damage level
-          cell->SetDiameter(10.0); // Shrink damaged tumors for visibility
-        } else if (sim->GetRandom()->Uniform() < 0.45) { // 45% immediate death (up from 30%)
+          cell->SetDamageLevel(0.8);
+        } else if (sim->GetRandom()->Uniform() < 0.3) {
           cell->SetCellType(kNecroticCell);
-          cell->SetDiameter(6.0); // Smaller dead tumor cells
         }
         break;
         
       case kHealthyBrain:
-        // ENHANCED brain tissue radiosensitivity - make necrosis clearly visible
-        if (sim->GetRandom()->Uniform() < 0.85) { // 85% of brain cells damaged!
+        // Healthy brain cells are more radiosensitive
+        if (sim->GetRandom()->Uniform() < 0.4) {
           cell->SetCellType(kDamagedBrain);
           cell->SetDamageLevel(0.9);
           // Trigger VEGF and HIF-1α expression (paper's key finding)
-          cell->SetVEGFExpression(0.8);
-          cell->SetHIF1AlphaLevel(0.9);
-          // Make visually smaller for clear distinction
-          cell->SetDiameter(8.0); // Smaller than healthy (12.0)
-        }
-        // IMMEDIATE brain tissue necrosis for clear visualization
-        if (sim->GetRandom()->Uniform() < 0.35) { // 35% immediate necrosis!
-          cell->SetCellType(kNecroticCell);
-          cell->SetDiameter(4.0); // Very small necrotic cells
+          cell->SetVEGFExpression(0.7);
+          cell->SetHIF1AlphaLevel(0.8);
         }
         break;
         
@@ -213,57 +207,47 @@ class CompartmentalModel : public Behavior {
       double rho = 0.02; // Proliferation rate parameter from paper
       cell->SetProliferationRate(rho);
       
-      // Simulate growth by increasing cell size instead of creating new cells
-      if (sim->GetRandom()->Uniform() < rho * 0.1) {
-        double current_diameter = cell->GetDiameter();
-        cell->SetDiameter(std::min(25.0, current_diameter * 1.05)); // Grow by 5%
+      // Probabilistic cell division based on ρ
+      if (sim->GetRandom()->Uniform() < rho * 0.1) { // Scale for timestep
+        // Create daughter cell (simplified cell division)
+        auto* rm = sim->GetResourceManager();
+        if (rm->GetNumAgents() < 4000) {
+          Real3 offset = {sim->GetRandom()->Uniform(-5, 5),
+                         sim->GetRandom()->Uniform(-5, 5),
+                         sim->GetRandom()->Uniform(-5, 5)};
+          Real3 new_pos = cell->GetPosition() + offset;
+          
+          auto* daughter = new RadiationCell(new_pos);
+          daughter->SetCellType(kProliferatingTumor);
+          daughter->SetProliferationRate(rho);
+          daughter->SetBirthStep(step);
+          daughter->AddBehavior(new CompartmentalModel());
+          
+          rm->AddAgent(daughter);
+        }
       }
     }
   }
   
   void ApplyNecroticAccumulation(RadiationCell* cell, Simulation* sim, uint64_t step) {
-    // Enhanced necrotic development for clear brain tissue necrosis visualization
+    // Paper's equation: dN/dt = H(t) - λN * I * N
     auto* random = sim->GetRandom();
     
-    if (cell->GetCellType() == kDamagedBrain) {
-      // MUCH HIGHER necrosis rate for damaged brain cells - progressive RN
-      double time_factor = std::min(1.0, step * 0.005); // Increases over time
-      double H_t = 0.25 + time_factor; // Much higher base rate for brain
-      double lambda_N = 0.005; // Very low clearance - necrosis accumulates
-      
-      // Brain tissue necrosis progresses faster than tumor
-      double necrosis_prob = H_t - (lambda_N * 0.3 * cell->GetDamageLevel());
-      
-      if (random->Uniform() < std::max(0.0, necrosis_prob)) {
-        cell->SetCellType(kNecroticCell);
-        cell->SetDiameter(3.0); // Very small for clear visualization
-        // Increase VEGF/HIF-1α expression as per paper's findings
-        cell->SetVEGFExpression(std::min(1.0, cell->GetVEGFExpression() + 0.4));
-        cell->SetHIF1AlphaLevel(std::min(1.0, cell->GetHIF1AlphaLevel() + 0.5));
-      }
-    }
-    
-    if (cell->GetCellType() == kDamagedTumor) {
-      double H_t = 0.15; // Lower rate for tumor
+    if (cell->GetCellType() == kDamagedBrain || cell->GetCellType() == kDamagedTumor) {
+      double H_t = 0.05; // Input of damaged cells becoming necrotic
       double lambda_N = 0.02; // Necrotic clearance rate by immune cells
       
-      double necrosis_prob = H_t - (lambda_N * 0.5);
+      // Check for nearby immune cells (simplified spatial interaction)
+      double immune_presence = 0.5; // Simplified - would need neighbor search in full model
+      
+      // Probability of becoming necrotic
+      double necrosis_prob = H_t - (lambda_N * immune_presence * cell->GetDamageLevel());
       
       if (random->Uniform() < std::max(0.0, necrosis_prob)) {
         cell->SetCellType(kNecroticCell);
-        cell->SetDiameter(5.0); // Larger than brain necrosis for distinction
+        // Increase VEGF/HIF-1α expression as per paper's findings
         cell->SetVEGFExpression(std::min(1.0, cell->GetVEGFExpression() + 0.2));
         cell->SetHIF1AlphaLevel(std::min(1.0, cell->GetHIF1AlphaLevel() + 0.3));
-      }
-    }
-    
-    // SECONDARY BRAIN NECROSIS - healthy cells near necrotic regions
-    if (cell->GetCellType() == kHealthyBrain && step > 20) {
-      double spread_prob = (step - 20) * 0.003; // Progressive spreading necrosis
-      if (random->Uniform() < spread_prob) {
-        cell->SetCellType(kDamagedBrain);
-        cell->SetDamageLevel(0.8);
-        cell->SetDiameter(8.0); // Smaller for visibility
       }
     }
   }
@@ -293,6 +277,28 @@ class CompartmentalModel : public Behavior {
           cell->GetImmuneActivation() > 0.6) {
         cell->SetCellType(kActivatedImmune);
       }
+      
+      // Recruit new immune cells (delayed activation from paper)
+      if (cell->GetCellType() == kActivatedImmune && 
+          step > 50 && // Delayed activation as per paper (6+ months)
+          random->Uniform() < 0.08) {
+        
+        auto* rm = sim->GetResourceManager();
+        if (rm->GetNumAgents() < 4000) {
+          Real3 offset = {random->Uniform(-10, 10),
+                         random->Uniform(-10, 10),
+                         random->Uniform(-10, 10)};
+          Real3 new_pos = cell->GetPosition() + offset;
+          
+          auto* new_immune = new RadiationCell(new_pos);
+          new_immune->SetCellType(kActivatedImmune);
+          new_immune->SetImmuneActivation(0.5);
+          new_immune->SetBirthStep(step);
+          new_immune->AddBehavior(new CompartmentalModel());
+          
+          rm->AddAgent(new_immune);
+        }
+      }
     }
   }
 };
@@ -311,7 +317,7 @@ inline int Simulate(int argc, const char** argv) {
   std::cout << "Creating brain tissue with paper's 6 cell populations..." << std::endl;
   
   // Healthy brain cells (normal brain tissue)
-  for (int i = 0; i < 1500; ++i) {
+  for (int i = 0; i < 2000; ++i) {
     Real3 position = {simulation.GetRandom()->Uniform(-100, 100),
                       simulation.GetRandom()->Uniform(-100, 100), 
                       simulation.GetRandom()->Uniform(-100, 100)};
@@ -347,7 +353,7 @@ inline int Simulate(int argc, const char** argv) {
   
   // Non-activated immune cells (baseline immune surveillance)
   std::cout << "Creating baseline immune cells..." << std::endl;
-  for (int i = 0; i < 100; ++i) {
+  for (int i = 0; i < 200; ++i) {
     Real3 position = {simulation.GetRandom()->Uniform(-120, 120),
                       simulation.GetRandom()->Uniform(-120, 120),
                       simulation.GetRandom()->Uniform(-120, 120)};
@@ -361,9 +367,9 @@ inline int Simulate(int argc, const char** argv) {
   }
   
   std::cout << "Initial populations created:" << std::endl;
-  std::cout << "- 1500 healthy brain cells" << std::endl;
+  std::cout << "- 2000 healthy brain cells" << std::endl;
   std::cout << "- 150 proliferating tumor cells (3 metastases)" << std::endl;
-  std::cout << "- 100 non-activated immune cells" << std::endl;
+  std::cout << "- 200 non-activated immune cells" << std::endl;
   
   // Add behaviors implementing paper's mathematical models
   rm->ForEachAgent([&](Agent* agent) {
@@ -384,7 +390,7 @@ inline int Simulate(int argc, const char** argv) {
   std::vector<double> lesion_volumes;
   std::vector<double> timepoints;
   
-  for (int step = 0; step < 5000; ++step) {
+  for (int step = 0; step < 200; ++step) {
     simulation.GetScheduler()->Simulate(1);
     
     // Track lesion volume every 10 steps for growth exponent β
@@ -397,9 +403,7 @@ inline int Simulate(int argc, const char** argv) {
                      cell->GetCellType() == kDamagedBrain ||
                      cell->GetCellType() == kDamagedTumor)) {
           // Each cell represents ~1 mm³ voxel from paper's model
-          // Account for cell growth in volume calculation
-          double cell_volume = std::pow(cell->GetDiameter() / 10.0, 3) * 0.5236; // Volume of sphere
-          total_volume += cell_volume;
+          total_volume += 1.0;
         }
       });
       
@@ -408,13 +412,13 @@ inline int Simulate(int argc, const char** argv) {
       
       // Progress reporting matching paper's timeline
       if (step == 10) {
-        std::cout << "Month 1: Early post-SRS phase (Volume: " << total_volume << " mm³)" << std::endl;
+        std::cout << "Month 1: Early post-SRS phase" << std::endl;
       } else if (step == 50) {
-        std::cout << "Month 5: Beginning of RN development (Volume: " << total_volume << " mm³)" << std::endl;
+        std::cout << "Month 5: Beginning of RN development" << std::endl;
       } else if (step == 100) {
-        std::cout << "Month 10: Peak RN development phase (Volume: " << total_volume << " mm³)" << std::endl;
+        std::cout << "Month 10: Peak RN development phase" << std::endl;
       } else if (step == 150) {
-        std::cout << "Month 15: Late RN phase (Volume: " << total_volume << " mm³)" << std::endl;
+        std::cout << "Month 15: Late RN phase" << std::endl;
       }
     }
   }
