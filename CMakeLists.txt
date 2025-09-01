@@ -244,6 +244,20 @@ else()
 endif()
 
 # Check if OpenMPI is present
+if(APPLE AND DEFINED BREW_PREFIX)
+  # Help CMake find Homebrew's OpenMPI
+  if(EXISTS "${BREW_PREFIX}/bin/mpicc" AND EXISTS "${BREW_PREFIX}/bin/mpicxx")
+    set(MPI_C_COMPILER   "${BREW_PREFIX}/bin/mpicc"  CACHE FILEPATH "MPI C compiler")
+    set(MPI_CXX_COMPILER "${BREW_PREFIX}/bin/mpicxx" CACHE FILEPATH "MPI CXX compiler")
+  endif()
+  list(APPEND CMAKE_PREFIX_PATH "${BREW_PREFIX}/opt/open-mpi")
+  # Help pkg-config locate OpenMPI .pc files
+  if(DEFINED ENV{PKG_CONFIG_PATH})
+    set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${BREW_PREFIX}/opt/open-mpi/lib/pkgconfig")
+  else()
+    set(ENV{PKG_CONFIG_PATH} "${BREW_PREFIX}/opt/open-mpi/lib/pkgconfig")
+  endif()
+endif()
 find_package(MPI COMPONENTS C CXX)
 if(MPI_FOUND)
   set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
