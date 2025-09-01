@@ -90,6 +90,13 @@ if(APPLE)
     execute_process(COMMAND ${BREW_BIN} --prefix libomp
                     OUTPUT_VARIABLE LIBOMP_BREW_PREFIX
                     OUTPUT_STRIP_TRAILING_WHITESPACE)
+  else()
+    # Fallbacks when brew is not on PATH
+    if(EXISTS "/opt/homebrew")
+      set(BREW_PREFIX "/opt/homebrew")
+    elseif(EXISTS "/usr/local")
+      set(BREW_PREFIX "/usr/local")
+    endif()
   endif()
   # Necessary to find the OpenMP library
   set(ENV{LDFLAGS} "$ENV{LDFLAGS} -L${LIBOMP_BREW_PREFIX}/lib")

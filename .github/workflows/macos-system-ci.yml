@@ -84,6 +84,8 @@ jobs:
           -Dbenchmark=ON \
           -Dlibgit2=ON \
           -DCMAKE_BUILD_TYPE=Release \
+          -DMPI_C_COMPILER="$(brew --prefix)/bin/mpicc" \
+          -DMPI_CXX_COMPILER="$(brew --prefix)/bin/mpicxx" \
           -B build
         cmake --build build --parallel --config Release
 
