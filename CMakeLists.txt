@@ -214,15 +214,16 @@ endif()
 
 if(NOPYENV)
    # On macOS
-   # need to give hint which binary to find, however ideally it should be taken from the range spec 
-   set(Python3_EXECUTABLE "${BREW_PREFIX}/bin/python3.9")
-   find_package(Python3 3.9.1...<3.10 COMPONENTS Interpreter Development)
-   set(pythonvers ${Python_VERSION})
+   # Prefer a provided Python3_EXECUTABLE; otherwise try Homebrew's python3
+   if(NOT DEFINED Python3_EXECUTABLE)
+     find_program(Python3_EXECUTABLE NAMES python3 HINTS "${BREW_PREFIX}/bin" NO_DEFAULT_PATH)
+   endif()
+   # Accept modern Python3 versions provided by Homebrew
+   find_package(Python3 3.9...<3.13 COMPONENTS Interpreter Development)
    if (NOT Python3_FOUND)
-      message(FATAL_ERROR "We did not find the Python 3.9 interpreter. "
-         "Please run ./prerequisites.sh (or \"brew install python@3.9\") "
-         "again before calling cmake. The Python 3.9 interpreter "
-         "is required in order to successfully use BioDynaMo.")      
+      message(FATAL_ERROR "Could not find a compatible Python 3 interpreter (>=3.9,<3.13). "
+         "Install Python (e.g., 'brew install python') and re-run CMake, or pass "
+         "-DPython3_EXECUTABLE=/path/to/python3.")
    endif()
 else()
    # Check if Python 3.9.1 from PyEnv is installed
