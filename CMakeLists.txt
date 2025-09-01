@@ -219,9 +219,9 @@ if(NOPYENV)
      find_program(Python3_EXECUTABLE NAMES python3 HINTS "${BREW_PREFIX}/bin" NO_DEFAULT_PATH)
    endif()
    # Accept modern Python3 versions provided by Homebrew
-   find_package(Python3 3.9...<3.13 COMPONENTS Interpreter Development)
+   find_package(Python3 3.9 COMPONENTS Interpreter Development)
    if (NOT Python3_FOUND)
-      message(FATAL_ERROR "Could not find a compatible Python 3 interpreter (>=3.9,<3.13). "
+      message(FATAL_ERROR "Could not find a compatible Python 3 interpreter (>=3.9). "
          "Install Python (e.g., 'brew install python') and re-run CMake, or pass "
          "-DPython3_EXECUTABLE=/path/to/python3.")
    endif()
