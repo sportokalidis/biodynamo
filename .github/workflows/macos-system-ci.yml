@@ -87,10 +87,18 @@ jobs:
         echo "pkg-config mpi (if available):"
         PKG_CONFIG_PATH="$(brew --prefix)/opt/open-mpi/lib/pkgconfig:$(brew --prefix)/opt/open-mpi/share/pkgconfig:$PKG_CONFIG_PATH" pkg-config --cflags mpi || true
 
+    - name: Ensure OpenMP is installed
+      shell: zsh {0}
+      run: |
+        brew install libomp || true
+        echo "libomp prefix: $(brew --prefix libomp)"
+        ls -l $(brew --prefix libomp)/lib || true
+
     - name: Build BioDynaMo
       shell: zsh {0}
       run: |
         export HOMEBREW_PREFIX="$(brew --prefix)"
+        export LIBOMP_BREW_PREFIX="$(brew --prefix libomp)"
         export OMPI_PREFIX="${HOMEBREW_PREFIX}/opt/open-mpi"
         export PATH="${OMPI_PREFIX}/bin:${HOMEBREW_PREFIX}/bin:$PATH"
         export PKG_CONFIG_PATH="${OMPI_PREFIX}/lib/pkgconfig:${OMPI_PREFIX}/share/pkgconfig:${PKG_CONFIG_PATH:-}"

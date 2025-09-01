@@ -320,6 +320,21 @@ if(APPLE)
   set(CMAKE_CPP_FLAGS "${CMAKE_CPP_FLAGS} -I${LIBOMP_BREW_PREFIX}/include")
   set(OpenMP_C_INCLUDE_DIR "${LIBOMP_BREW_PREFIX}/include")
   set(OpenMP_CXX_INCLUDE_DIR "${LIBOMP_BREW_PREFIX}/include")
+
+  # Help CMake's FindOpenMP with Apple Clang + Homebrew libomp
+  set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp")
+  set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp")
+  set(OpenMP_C_LIB_NAMES "omp")
+  set(OpenMP_CXX_LIB_NAMES "omp")
+  set(OpenMP_omp_LIBRARY "${LIBOMP_BREW_PREFIX}/lib/libomp.dylib")
+
+  # Ensure headers/libs are discoverable during try_compile
+  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -I${LIBOMP_BREW_PREFIX}/include")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${LIBOMP_BREW_PREFIX}/include")
+  list(APPEND CMAKE_INCLUDE_PATH "${LIBOMP_BREW_PREFIX}/include")
+  list(APPEND CMAKE_LIBRARY_PATH "${LIBOMP_BREW_PREFIX}/lib")
+  link_directories(${LIBOMP_BREW_PREFIX}/lib)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L${LIBOMP_BREW_PREFIX}/lib -Wl,-rpath,${LIBOMP_BREW_PREFIX}/lib")
 endif(APPLE)
 
 # Check if we have a compatible openmp compiler
