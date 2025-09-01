@@ -75,15 +75,49 @@ jobs:
     #     path: build/third_party
     #     key: ${{ runner.os }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
 
+    - name: Ensure OpenMPI is installed
+      shell: zsh {0}
+      run: |
+        brew install open-mpi || true
+        echo "OpenMPI prefix: $(brew --prefix open-mpi)"
+        ls -l $(brew --prefix)/opt/open-mpi/bin || true
+        which mpicc || true
+        mpicc --showme:compile || true
+        mpicc --showme:link || true
+        echo "pkg-config mpi (if available):"
+        PKG_CONFIG_PATH="$(brew --prefix)/opt/open-mpi/lib/pkgconfig:$(brew --prefix)/opt/open-mpi/share/pkgconfig:$PKG_CONFIG_PATH" pkg-config --cflags mpi || true
+
+    - name: Ensure OpenMP is installed
+      shell: zsh {0}
+      run: |
+        brew install libomp || true
+        echo "libomp prefix: $(brew --prefix libomp)"
+        ls -l $(brew --prefix libomp)/lib || true
+
     - name: Build BioDynaMo
       shell: zsh {0}
       run: |
+        export HOMEBREW_PREFIX="$(brew --prefix)"
+        export LIBOMP_BREW_PREFIX="$(brew --prefix libomp)"
+        export OMPI_PREFIX="${HOMEBREW_PREFIX}/opt/open-mpi"
+        export PATH="${OMPI_PREFIX}/bin:${HOMEBREW_PREFIX}/bin:$PATH"
+        export PKG_CONFIG_PATH="${OMPI_PREFIX}/lib/pkgconfig:${OMPI_PREFIX}/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+        export OMPI_CC="$(xcrun -f clang)"
+        export OMPI_CXX="$(xcrun -f clang++)"
+        export CC="${OMPI_PREFIX}/bin/mpicc"
+        export CXX="${OMPI_PREFIX}/bin/mpicxx"
+        rm -rf build
         cmake \
           -Dopencl=OFF \
           -Dparaview=ON \
           -Dbenchmark=ON \
           -Dlibgit2=ON \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER="${OMPI_PREFIX}/bin/mpicc" \
+          -DCMAKE_CXX_COMPILER="${OMPI_PREFIX}/bin/mpicxx" \
+          -DMPI_C_COMPILER="${OMPI_PREFIX}/bin/mpicc" \
+          -DMPI_CXX_COMPILER="${OMPI_PREFIX}/bin/mpicxx" \
+          -DCMAKE_PREFIX_PATH="${OMPI_PREFIX}" \
           -B build
         cmake --build build --parallel --config Release
 

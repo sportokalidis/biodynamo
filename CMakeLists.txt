@@ -90,6 +90,13 @@ if(APPLE)
     execute_process(COMMAND ${BREW_BIN} --prefix libomp
                     OUTPUT_VARIABLE LIBOMP_BREW_PREFIX
                     OUTPUT_STRIP_TRAILING_WHITESPACE)
+  else()
+    # Fallbacks when brew is not on PATH
+    if(EXISTS "/opt/homebrew")
+      set(BREW_PREFIX "/opt/homebrew")
+    elseif(EXISTS "/usr/local")
+      set(BREW_PREFIX "/usr/local")
+    endif()
   endif()
   # Necessary to find the OpenMP library
   set(ENV{LDFLAGS} "$ENV{LDFLAGS} -L${LIBOMP_BREW_PREFIX}/lib")
@@ -214,15 +221,16 @@ endif()
 
 if(NOPYENV)
    # On macOS
-   # need to give hint which binary to find, however ideally it should be taken from the range spec 
-   set(Python3_EXECUTABLE "${BREW_PREFIX}/bin/python3.9")
-   find_package(Python3 3.9.1...<3.10 COMPONENTS Interpreter Development)
-   set(pythonvers ${Python_VERSION})
+   # Prefer a provided Python3_EXECUTABLE; otherwise try Homebrew's python3
+   if(NOT DEFINED Python3_EXECUTABLE)
+     find_program(Python3_EXECUTABLE NAMES python3 HINTS "${BREW_PREFIX}/bin" NO_DEFAULT_PATH)
+   endif()
+   # Accept modern Python3 versions provided by Homebrew
+   find_package(Python3 3.9 COMPONENTS Interpreter Development)
    if (NOT Python3_FOUND)
-      message(FATAL_ERROR "We did not find the Python 3.9 interpreter. "
-         "Please run ./prerequisites.sh (or \"brew install python@3.9\") "
-         "again before calling cmake. The Python 3.9 interpreter "
-         "is required in order to successfully use BioDynaMo.")      
+      message(FATAL_ERROR "Could not find a compatible Python 3 interpreter (>=3.9). "
+         "Install Python (e.g., 'brew install python') and re-run CMake, or pass "
+         "-DPython3_EXECUTABLE=/path/to/python3.")
    endif()
 else()
    # Check if Python 3.9.1 from PyEnv is installed
@@ -243,14 +251,49 @@ else()
 endif()
 
 # Check if OpenMPI is present
+if(APPLE AND DEFINED BREW_PREFIX)
+  # Help CMake find Homebrew's OpenMPI
+  set(_BDM_OMPI_PREFIX "${BREW_PREFIX}/opt/open-mpi")
+  # Expose common CMake cache hints
+  if(EXISTS "${_BDM_OMPI_PREFIX}")
+    set(MPI_ROOT "${_BDM_OMPI_PREFIX}" CACHE PATH "MPI root prefix")
+    set(MPI_HOME "${_BDM_OMPI_PREFIX}" CACHE PATH "MPI home prefix")
+  endif()
+  # Prefer wrapper compilers if available
+  if(EXISTS "${BREW_PREFIX}/bin/mpicc")
+    set(MPI_C_COMPILER   "${BREW_PREFIX}/bin/mpicc"  CACHE FILEPATH "MPI C compiler")
+  elseif(EXISTS "${_BDM_OMPI_PREFIX}/bin/mpicc")
+    set(MPI_C_COMPILER   "${_BDM_OMPI_PREFIX}/bin/mpicc"  CACHE FILEPATH "MPI C compiler")
+  endif()
+  if(EXISTS "${BREW_PREFIX}/bin/mpicxx")
+    set(MPI_CXX_COMPILER "${BREW_PREFIX}/bin/mpicxx" CACHE FILEPATH "MPI CXX compiler")
+  elseif(EXISTS "${_BDM_OMPI_PREFIX}/bin/mpicxx")
+    set(MPI_CXX_COMPILER "${_BDM_OMPI_PREFIX}/bin/mpicxx" CACHE FILEPATH "MPI CXX compiler")
+  endif()
+  # Generic search hints
+  list(APPEND CMAKE_PREFIX_PATH "${_BDM_OMPI_PREFIX}")
+  list(APPEND CMAKE_INCLUDE_PATH "${_BDM_OMPI_PREFIX}/include")
+  list(APPEND CMAKE_LIBRARY_PATH "${_BDM_OMPI_PREFIX}/lib")
+  # Help pkg-config locate OpenMPI .pc files
+  if(DEFINED ENV{PKG_CONFIG_PATH})
+    set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${_BDM_OMPI_PREFIX}/lib/pkgconfig:${_BDM_OMPI_PREFIX}/share/pkgconfig")
+  else()
+    set(ENV{PKG_CONFIG_PATH} "${_BDM_OMPI_PREFIX}/lib/pkgconfig:${_BDM_OMPI_PREFIX}/share/pkgconfig")
+  endif()
+  # Ensure wrapper compilers are in PATH for CMake checks
+  if(DEFINED ENV{PATH})
+    set(ENV{PATH} "${_BDM_OMPI_PREFIX}/bin:$ENV{PATH}")
+  else()
+    set(ENV{PATH} "${_BDM_OMPI_PREFIX}/bin")
+  endif()
+endif()
 find_package(MPI COMPONENTS C CXX)
 if(MPI_FOUND)
   set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
   include_directories(${MPI_CXX_COMPILER_INCLUDE_DIRS})
   add_definitions("-DUSE_MPI")
 else(MPI_FOUND)
-  MESSAGE(FATAL_ERROR "We did not find any OpenMPI installation. Please run ./prerequisites.sh again before
-  calling cmake. The OpenMPI library is required in order to successfully use BioDynaMo." )
+  MESSAGE(FATAL_ERROR "We did not find any OpenMPI installation. Please run ./prerequisites.sh again before\n  calling cmake. The OpenMPI library is required in order to successfully use BioDynaMo." )
 endif(MPI_FOUND)
 
 if(APPLE)
@@ -277,6 +320,21 @@ if(APPLE)
   set(CMAKE_CPP_FLAGS "${CMAKE_CPP_FLAGS} -I${LIBOMP_BREW_PREFIX}/include")
   set(OpenMP_C_INCLUDE_DIR "${LIBOMP_BREW_PREFIX}/include")
   set(OpenMP_CXX_INCLUDE_DIR "${LIBOMP_BREW_PREFIX}/include")
+
+  # Help CMake's FindOpenMP with Apple Clang + Homebrew libomp
+  set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp")
+  set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp")
+  set(OpenMP_C_LIB_NAMES "omp")
+  set(OpenMP_CXX_LIB_NAMES "omp")
+  set(OpenMP_omp_LIBRARY "${LIBOMP_BREW_PREFIX}/lib/libomp.dylib")
+
+  # Ensure headers/libs are discoverable during try_compile
+  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -I${LIBOMP_BREW_PREFIX}/include")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${LIBOMP_BREW_PREFIX}/include")
+  list(APPEND CMAKE_INCLUDE_PATH "${LIBOMP_BREW_PREFIX}/include")
+  list(APPEND CMAKE_LIBRARY_PATH "${LIBOMP_BREW_PREFIX}/lib")
+  link_directories(${LIBOMP_BREW_PREFIX}/lib)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L${LIBOMP_BREW_PREFIX}/lib -Wl,-rpath,${LIBOMP_BREW_PREFIX}/lib")
 endif(APPLE)
 
 # Check if we have a compatible openmp compiler
