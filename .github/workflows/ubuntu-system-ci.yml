@@ -57,7 +57,6 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y curl
-        brew uninstall cmake || true
         curl https://raw.githubusercontent.com/${GHA_REPOSITORY}/${GHA_BRANCH_NAME}/util/install | bash
         # remove whole bidynamo repository to catch errors related to paths pointing into the build dir
         mktemp -d
