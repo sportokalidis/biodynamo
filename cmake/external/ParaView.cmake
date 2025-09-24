@@ -2,6 +2,10 @@ include(utils)
 
 SET(PARAVIEW_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/paraview")
 
+if("$(DETECTED_OS_VERS)" MATCHES "^osx-26" )
+  SET(DETECTED_OS_VERS osx-15.5)
+endif()
+
 if(APPLE AND "${DETECTED_ARCH}" STREQUAL "i386")
   # The release of cmake 3.23.0 broke our build of ParaView on MacOSX. 
   # The build was fixed with a reupload and carries the additional tag cm233.
