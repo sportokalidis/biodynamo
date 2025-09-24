@@ -3,8 +3,8 @@ include(utils)
 SET(PARAVIEW_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/paraview")
 
 if("${DETECTED_OS_VERS}" MATCHES "^osx-26(\\.|$)")
-  message(STATUS "Detected osx-26, using osx-15.6 ParaView build")
-  set(DETECTED_OS_VERS "osx-15.6")
+  message(STATUS "Detected osx-26, using osx-15.5 ParaView build")
+  set(DETECTED_OS_VERS "osx-15.5")
 endif()
 
 # Debug prints to verify values
