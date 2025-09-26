@@ -108,6 +108,7 @@ jobs:
       working-directory: build
       run: |
         source $(find /Users -path "*/bin/*" -name "*thisbdm.sh")
+        source /Users/runner/work/biodynamo/biodynamo/build/third_party/root/bin/thisroot.sh
         root --version
         root -config
         git config --system user.name "Test User"
