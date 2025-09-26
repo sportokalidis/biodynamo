@@ -6,7 +6,8 @@ SET(ROOT_SOURCE_DIR "${CMAKE_THIRD_PARTY_DIR}/root")
 set(ROOT_TAR_FILE root_v6.30.02_cxx17_python3.9_${DETECTED_OS_VERS}.tar.gz)
 set(ROOT_SHA_KEY ${DETECTED_OS_VERS}-ROOT)
 if(APPLE)
-  if("${DETECTED_OS_VERS}" MATCHES "^osx-15" OR
+  if("${DETECTED_OS_VERS}" MATCHES "^osx-26" OR
+    "${DETECTED_OS_VERS}" MATCHES "^osx-15" OR
      "${DETECTED_OS_VERS}" MATCHES "^osx-14" OR
      "${DETECTED_OS_VERS}" MATCHES "^osx-13" OR
      "${DETECTED_OS_VERS}" MATCHES "^osx-12" OR
@@ -16,8 +17,10 @@ if(APPLE)
     message(STATUS "##### XCODE version: ${XCODE_VERS}")
     if("${XCODE_VERS}" GREATER_EQUAL "16.4")
       message(STATUS "##### Using ROOT builds for XCODE 16.4")
-      set(ROOT_TAR_FILE root_v6.36.00_cxx17_python3.9_osx-xcode-16.4-${DETECTED_ARCH}.tar.gz)
-      set(ROOT_SHA_KEY osx-xcode-16.4-${DETECTED_ARCH}-ROOT)
+      # set(ROOT_TAR_FILE root_v6.36.00_cxx17_python3.9_osx-xcode-16.4-${DETECTED_ARCH}.tar.gz)
+      # set(ROOT_SHA_KEY osx-xcode-16.4-${DETECTED_ARCH}-ROOT)
+      set(ROOT_TAR_FILE root_v6.36.04.macos-15.6-arm64-test.tar.gz)
+      set(ROOT_SHA_KEY root-test)
     elseif("${XCODE_VERS}" GREATER_EQUAL "16.3")
       message(STATUS "##### Using ROOT builds for XCODE 16.3")
       set(ROOT_TAR_FILE root_v6.34.08_cxx17_python3.9_osx-xcode-16.3-${DETECTED_ARCH}.tar.gz)
