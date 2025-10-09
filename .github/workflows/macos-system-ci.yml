@@ -41,7 +41,7 @@ jobs:
         echo "GHA_REPOSITORY=${{ github.repository}}" >> $GITHUB_ENV
 
     - name: Install zlib
-      run: brew install zlib
+      run: brew install zlib zstd
 
     - name: Set zlib env vars
       run: |

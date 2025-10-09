@@ -37,7 +37,7 @@ jobs:
         sudo ln -sf /Applications/CMake.app/Contents/bin/cmake /usr/local/bin/cmake
 
     - name: Install zlib
-      run: brew install zlib
+      run: brew install zlib zstd
 
     - name: Set zlib env vars
       run: |
