@@ -88,7 +88,6 @@ jobs:
           -Dlibgit2=ON \
           -DCMAKE_BUILD_TYPE=Release \
           -B build
-        source /Users/runner/work/biodynamo/biodynamo/build/third_party/root/bin/thisroot.sh
         cmake --build build --parallel --config Release
 
     # Don't do this in the `Build BioDynaMo step`, because notebooks might time out in GHA
@@ -108,7 +107,6 @@ jobs:
       working-directory: build
       run: |
         source $(find /Users -path "*/bin/*" -name "*thisbdm.sh")
-        source /Users/runner/work/biodynamo/biodynamo/build/third_party/root/bin/thisroot.sh
         root --version
         root -config
         git config --system user.name "Test User"
