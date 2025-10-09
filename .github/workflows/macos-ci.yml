@@ -28,7 +28,7 @@ jobs:
         # GHA macOS: unpin CMake to fix Homebrew conflict (actions/runner-images#12912)
         brew uninstall --force cmake || true
         # brew untap local/pinned || true
-        brew install libomp open-mpi python@3.9 wget cmake ninja qt@5 libgit2 zlib
+        brew install libomp open-mpi python@3.9 wget cmake ninja qt@5 libgit2 zlib 
 
 
         wget https://cmake.org/files/v3.24/cmake-3.24.1-macos-universal.tar.gz
@@ -37,7 +37,7 @@ jobs:
         sudo ln -sf /Applications/CMake.app/Contents/bin/cmake /usr/local/bin/cmake
 
     - name: Install zlib
-      run: brew install zlib zstd
+      run: brew install zlib zstd ncurses
 
     - name: Set zlib env vars
       run: |
@@ -48,7 +48,10 @@ jobs:
         export DYLD_LIBRARY_PATH="/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH"
         echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
         
-
+    - name: Symlink ncurses for compatibility
+      run: |
+        sudo mkdir -p /opt/local/lib
+        sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
 
 
 

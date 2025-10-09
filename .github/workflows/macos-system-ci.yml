@@ -52,6 +52,13 @@ jobs:
         export DYLD_LIBRARY_PATH="/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH"
         echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
 
+    - name: Symlink ncurses for compatibility
+      run: |
+        sudo mkdir -p /opt/local/lib
+        sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
+
+
+
     - name: Install BioDynaMo
       shell: zsh {0}
       run: |
