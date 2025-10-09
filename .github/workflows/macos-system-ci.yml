@@ -49,6 +49,8 @@ jobs:
         echo "CPPFLAGS=-I/opt/homebrew/opt/zlib/include" >> $GITHUB_ENV
         echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
 
+        echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+
     - name: Install BioDynaMo
       shell: zsh {0}
       run: |
