@@ -250,32 +250,18 @@ void ParaviewAdaptor::WriteSimulationInfoJsonFile() {
 /// file and does not have to perform a lot of manual steps.
 void ParaviewAdaptor::GenerateParaviewState() {
   auto* sim = Simulation::GetActive();
+  std::stringstream python_cmd;
+  std::string pv_dir = std::getenv("ParaView_DIR");
+  std::string bdmsys = std::getenv("BDMSYS");
 
-  const char* pv_dir_c = std::getenv("ParaView_DIR");
-  const char* bdmsys_c = std::getenv("BDMSYS");
-  std::string pv_dir = pv_dir_c ? pv_dir_c : "";
-  std::string bdmsys = bdmsys_c ? bdmsys_c : "";
-
-  // Always good for headless
-  setenv("PV_BATCH_USE_OFFSCREEN", "1", 1);
-
-  // CI-only: tell the script to avoid rendering
-  if (std::getenv("GITHUB_ACTIONS")) {
-    setenv("BDM_RENDERLESS", "1", 1);
-  }
-
-  std::stringstream cmd;
-  cmd << pv_dir << "/bin/pvbatch"
-      << " --force-offscreen-rendering"
-      << " " << bdmsys
-      << "/include/core/visualization/paraview/generate_pv_state.py "
-      << sim->GetOutputDir() << "/" << kSimulationInfoJson;
-
-  int rc = system(cmd.str().c_str());
-  if (rc) {
+  python_cmd << pv_dir << "/bin/pvbatch " << bdmsys
+             << "/include/core/visualization/paraview/generate_pv_state.py "
+             << sim->GetOutputDir() << "/" << kSimulationInfoJson;
+  int ret_code = system(python_cmd.str().c_str());
+  if (ret_code) {
     Log::Fatal("ParaviewAdaptor::GenerateParaviewState",
                "Error during generation of ParaView state\n", "Command\n",
-               cmd.str());
+               python_cmd.str());
   }
 }
 
