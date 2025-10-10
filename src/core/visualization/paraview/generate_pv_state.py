@@ -30,104 +30,125 @@
 #          ]
 #        }
 
-import glob
-import json
-import os.path
-import sys
-import functools
+import glob, json, os, sys, functools
+
+# Detect our CI-only switch
+RENDERLESS = False
+if len(sys.argv) >= 2 and sys.argv[1] == "--bd-renderless":
+    RENDERLESS = True
+    # remove the flag before normal parsing
+    sys.argv.pop(1)
+
+# Ensure pvbatch stays headless early
+os.environ.setdefault("PV_BATCH_USE_OFFSCREEN", "1")
+
 from paraview.simple import *
+# If your default_insitu_pipeline import is required:
 from default_insitu_pipeline import *
 
-def ExtractIterationFromFilename(x): return int(x.split('-')[-1].split('.')[0])
+def ExtractIterationFromFilename(x): 
+    return int(x.split('-')[-1].split('.')[0])
 
-# ------------------------------------------------------------------------------
-def LoadSimulationObjectData(result_dir, agent_info):
-    agent_name = agent_info['name']
-    # determine pvtu files
-    files = glob.glob('{0}/{1}-*.pvtu'.format(result_dir, agent_name))
-    if len(files) == 0:
-        print('No data files found for agent {0}'.format(agent_name))
-        sys.exit(1)
-
-    files = sorted(files, key=functools.cmp_to_key(lambda x, y: ExtractIterationFromFilename(x) - ExtractIterationFromFilename(y)))
-
-    # create a new 'XML Partitioned Unstructured Grid Reader'
-    return XMLPartitionedUnstructuredGridReader(FileName=files)
-
-# ------------------------------------------------------------------------------
-def LoadExtracellularSubstanceData(result_dir, substance_info):
-    substance_name = substance_info['name']
-    # determine pvti files
-    files = glob.glob('{0}/{1}-*.pvti'.format(result_dir, substance_name))
-    if len(files) == 0:
-        print('No data files found for substance {0}'.format(substance_name))
-        sys.exit(1)
-
-    files = sorted(files, key=functools.cmp_to_key(lambda x, y: ExtractIterationFromFilename(x) - ExtractIterationFromFilename(y)))
-    return XMLPartitionedImageDataReader(FileName=files)
-
-# ------------------------------------------------------------------------------
-def BuildDefaultPipeline(json_filename):
-    # load json file containing the information to generate the state
-    if os.path.exists(json_filename):
-        with open(json_filename, 'r') as json_file:
-            build_info = json.load(json_file)
-    else:
-        print('Json file {0} does not exist'.format(json_filename))
-        sys.exit(1)
-    
-    #### disable automatic camera reset on 'Show'
+# --- render-less helpers ------------------------------------------------------
+if RENDERLESS:
     paraview.simple._DisableFirstRenderCameraReset()
 
-    sim_info = build_info['simulation']
+    # No-op Render
+    def _no_render(*a, **k):
+        return None
 
-    # change directory
-    result_dir = sim_info['result_dir']
-    if result_dir != "" and not os.path.exists(result_dir):
-        print('Simulation result directory "{0}" does not exist'.format(result_dir))
+    # “Show” without actually rendering
+    def _safe_show(src, view=None):
+        v = view or GetActiveView()
+        # Create (or get) a representation proxy without forcing a draw
+        rep = GetRepresentation(src, v)
+        return rep
+
+    # Monkey-patch the few calls that might force a draw
+    paraview.simple.Render = _no_render
+    paraview.simple.Show = _safe_show
+
+# ------------------------------------------------------------------------------
+
+def LoadSimulationObjectData(result_dir, agent_info):
+    agent_name = agent_info['name']
+    files = glob.glob(f'{result_dir}/{agent_name}-*.pvtu')
+    if not files:
+        print(f'No data files found for agent {agent_name}')
+        sys.exit(1)
+    files = sorted(files, key=functools.cmp_to_key(
+        lambda x, y: ExtractIterationFromFilename(x) - ExtractIterationFromFilename(y)))
+    return XMLPartitionedUnstructuredGridReader(FileName=files)
+
+def LoadExtracellularSubstanceData(result_dir, substance_info):
+    substance_name = substance_info['name']
+    files = glob.glob(f'{result_dir}/{substance_name}-*.pvti')
+    if not files:
+        print(f'No data files found for substance {substance_name}')
+        sys.exit(1)
+    files = sorted(files, key=functools.cmp_to_key(
+        lambda x, y: ExtractIterationFromFilename(x) - ExtractIterationFromFilename(y)))
+    return XMLPartitionedImageDataReader(FileName=files)
+
+def BuildDefaultPipeline(json_filename):
+    if os.path.exists(json_filename):
+        with open(json_filename, 'r') as f:
+            build_info = json.load(f)
+    else:
+        print(f'Json file {json_filename} does not exist')
         sys.exit(1)
 
-    # get active view
+    sim_info = build_info['simulation']
+    result_dir = sim_info['result_dir']
+    if result_dir and not os.path.exists(result_dir):
+        print(f'Simulation result directory "{result_dir}" does not exist')
+        sys.exit(1)
+
+    # Create a view (we won’t render it in renderless mode)
     render_view = GetActiveViewOrCreate('RenderView')
     render_view.InteractionMode = '3D'
+    if RENDERLESS:
+        render_view.EnableRenderOnInteraction = 0
 
-    # agents
+    iterations = []
+
+    # Agents
     for agent_info in build_info['agents']:
         data = LoadSimulationObjectData(result_dir, agent_info)
         ProcessSimulationObject(agent_info, data, render_view)
-    # extracellular substances
+        iterations += [ExtractIterationFromFilename(f) for f in data.FileName]
+
+    # Substances
     for substance_info in build_info['extracellular_substances']:
         data = LoadExtracellularSubstanceData(result_dir, substance_info)
         ProcessExtracellularSubstance(substance_info, data, render_view)
+        iterations += [ExtractIterationFromFilename(f) for f in data.FileName]
 
-    # get animation scene
+    # Set time without forcing a render
+    iterations = sorted(set(iterations))
     animation_scene = GetAnimationScene()
-    # update animation scene based on data timesteps
-    animation_scene.UpdateAnimationUsingDataTimeSteps()
+    tk = GetTimeKeeper()
+    tk.TimestepValues = iterations
+    animation_scene.NumberOfFrames = len(iterations)
+
+    # IMPORTANT: do NOT call UpdateAnimationUsingDataTimeSteps() in renderless mode
+    if not RENDERLESS:
+        animation_scene.UpdateAnimationUsingDataTimeSteps()
 
     return build_info
 
-# ------------------------------------------------------------------------------
 def WritePvsmFile(build_info):
     sim_info = build_info['simulation']
     result_dir = sim_info['result_dir']
-
     os.chdir(result_dir)
-    SaveState('{0}.pvsm'.format(sim_info['name']))
+    SaveState(f"{sim_info['name']}.pvsm")
+    # Avoid any extra Show/Render here (especially Show(Cone()))
 
-    # This avoid the error: Inconsistency detected by ld.so
-    # See: https://discourse.paraview.org/t/inconsistency-detected-by-ld-so/3778
-    Show(Cone())
-
-# ------------------------------------------------------------------------------
 if __name__ == '__main__':
-    arguments = sys.argv[1:]
-    if len(arguments) != 1:
+    args = sys.argv[1:]
+    if len(args) != 1:
         print("This script expects the json filename as argument.")
         sys.exit(1)
-    json_filename = arguments[0]
-
-
+    json_filename = args[0]
     build_info = BuildDefaultPipeline(json_filename)
-    WritePvsmFile(build_info)    
-    
+    WritePvsmFile(build_info)

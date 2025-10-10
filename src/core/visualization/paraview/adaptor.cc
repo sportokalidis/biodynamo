@@ -250,23 +250,35 @@ void ParaviewAdaptor::WriteSimulationInfoJsonFile() {
 /// file and does not have to perform a lot of manual steps.
 void ParaviewAdaptor::GenerateParaviewState() {
   auto* sim = Simulation::GetActive();
-  std::stringstream python_cmd;
-  std::string pv_dir = std::getenv("ParaView_DIR");
-  std::string bdmsys = std::getenv("BDMSYS");
 
-    // Make pvbatch select offscreen path early
+  const char* pv_dir_c = std::getenv("ParaView_DIR");
+  const char* bdmsys_c = std::getenv("BDMSYS");
+  std::string pv_dir = pv_dir_c ? pv_dir_c : "";
+  std::string bdmsys = bdmsys_c ? bdmsys_c : "";
+
+  // Always good for headless
   setenv("PV_BATCH_USE_OFFSCREEN", "1", 1);
-  
-  python_cmd << pv_dir << "/bin/pvbatch"
-             << " --force-offscreen-rendering"   // <- important on macOS-26
-             << " " << bdmsys
-             << "/include/core/visualization/paraview/generate_pv_state.py "
-             << sim->GetOutputDir() << "/" << kSimulationInfoJson;
-  int ret_code = system(python_cmd.str().c_str());
-  if (ret_code) {
+
+  // CI-only renderless flag so users are unaffected locally
+  bool in_github_actions = std::getenv("GITHUB_ACTIONS") != nullptr;
+
+  std::stringstream cmd;
+  cmd << pv_dir << "/bin/pvbatch"
+      << " --force-offscreen-rendering";
+
+  if (in_github_actions) {
+    cmd << " --bd-renderless";  // our custom flag for the script
+  }
+
+  cmd << " " << bdmsys
+      << "/include/core/visualization/paraview/generate_pv_state.py "
+      << sim->GetOutputDir() << "/" << kSimulationInfoJson;
+
+  int rc = system(cmd.str().c_str());
+  if (rc) {
     Log::Fatal("ParaviewAdaptor::GenerateParaviewState",
                "Error during generation of ParaView state\n", "Command\n",
-               python_cmd.str());
+               cmd.str());
   }
 }
 
