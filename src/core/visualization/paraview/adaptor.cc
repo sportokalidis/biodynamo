@@ -254,7 +254,9 @@ void ParaviewAdaptor::GenerateParaviewState() {
   std::string pv_dir = std::getenv("ParaView_DIR");
   std::string bdmsys = std::getenv("BDMSYS");
 
-  python_cmd << pv_dir << "/bin/pvbatch " << bdmsys
+  python_cmd << pv_dir << "/bin/pvbatch"
+             << " --force-offscreen-rendering"   // <- important on macOS-26
+             << " " << bdmsys
              << "/include/core/visualization/paraview/generate_pv_state.py "
              << sim->GetOutputDir() << "/" << kSimulationInfoJson;
   int ret_code = system(python_cmd.str().c_str());
