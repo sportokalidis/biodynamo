@@ -259,18 +259,15 @@ void ParaviewAdaptor::GenerateParaviewState() {
   // Always good for headless
   setenv("PV_BATCH_USE_OFFSCREEN", "1", 1);
 
-  // CI-only renderless flag so users are unaffected locally
-  bool in_github_actions = std::getenv("GITHUB_ACTIONS") != nullptr;
+  // CI-only: tell the script to avoid rendering
+  if (std::getenv("GITHUB_ACTIONS")) {
+    setenv("BDM_RENDERLESS", "1", 1);
+  }
 
   std::stringstream cmd;
   cmd << pv_dir << "/bin/pvbatch"
-      << " --force-offscreen-rendering";
-
-  if (in_github_actions) {
-    cmd << " --bd-renderless";  // our custom flag for the script
-  }
-
-  cmd << " " << bdmsys
+      << " --force-offscreen-rendering"
+      << " " << bdmsys
       << "/include/core/visualization/paraview/generate_pv_state.py "
       << sim->GetOutputDir() << "/" << kSimulationInfoJson;
 
