@@ -129,7 +129,7 @@ jobs:
         root --version
         root -config
         export PV_USE_OFFSCREEN=1
-        export DISPLAY=:99
+        unset DISPLAY
         git config --system user.name "Test User"
         git config --system user.email user@test.com
         make run-demos
