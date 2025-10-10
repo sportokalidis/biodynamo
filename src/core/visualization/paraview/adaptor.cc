@@ -254,6 +254,9 @@ void ParaviewAdaptor::GenerateParaviewState() {
   std::string pv_dir = std::getenv("ParaView_DIR");
   std::string bdmsys = std::getenv("BDMSYS");
 
+    // Make pvbatch select offscreen path early
+  setenv("PV_BATCH_USE_OFFSCREEN", "1", 1);
+  
   python_cmd << pv_dir << "/bin/pvbatch"
              << " --force-offscreen-rendering"   // <- important on macOS-26
              << " " << bdmsys
