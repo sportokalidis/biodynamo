@@ -100,6 +100,9 @@ jobs:
     - name: Build BioDynaMo
       shell: zsh {0}
       run: |
+        export PV_USE_OFFSCREEN=1
+        export QT_QPA_PLATFORM=offscreen
+        export DISPLAY=:0
         cmake \
           -Dopencl=OFF \
           -Dparaview=ON \
@@ -129,7 +132,8 @@ jobs:
         root --version
         root -config
         export PV_USE_OFFSCREEN=1
-        unset DISPLAY
+        export QT_QPA_PLATFORM=offscreen
+        export DISPLAY=:0
         git config --system user.name "Test User"
         git config --system user.email user@test.com
         make run-demos

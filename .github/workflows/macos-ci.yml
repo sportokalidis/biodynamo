@@ -69,6 +69,9 @@ jobs:
     - name: Build BioDynaMo
       shell: bash
       run: |
+        export PV_USE_OFFSCREEN=1
+        export QT_QPA_PLATFORM=offscreen
+        export DISPLAY=:0
         cmake -G Ninja \
           -Dopencl=OFF \
           -Dparaview=ON \
@@ -83,7 +86,8 @@ jobs:
       working-directory: build
       run: |
         export PV_USE_OFFSCREEN=1
-        unset DISPLAY
+        export QT_QPA_PLATFORM=offscreen
+        export DISPLAY=:0
         . bin/thisbdm.sh
         root --version
         root -config
