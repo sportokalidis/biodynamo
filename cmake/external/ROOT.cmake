@@ -98,58 +98,6 @@ find_package(ROOT COMPONENTS Geom Gui GenVector REQUIRED)
 string(REGEX REPLACE "/include$" "" TMP_ROOT_PATH ${ROOT_INCLUDE_DIRS})
 set(ENV{ROOTSYS} ${TMP_ROOT_PATH})
 
-# Fix hardcoded keg-only library paths in pre-built ROOT on macOS
-if(APPLE)
-  find_program(BREW_BIN brew)
-  if(BREW_BIN)
-    execute_process(COMMAND ${BREW_BIN} --prefix zlib
-                    OUTPUT_VARIABLE ZLIB_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-    execute_process(COMMAND ${BREW_BIN} --prefix zstd
-                    OUTPUT_VARIABLE ZSTD_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-    execute_process(COMMAND ${BREW_BIN} --prefix ncurses
-                    OUTPUT_VARIABLE NCURSES_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-
-    # Get list of all ROOT libraries that might need fixing
-    file(GLOB ROOT_LIBS "${TMP_ROOT_PATH}/lib/*.so" "${TMP_ROOT_PATH}/lib/*.dylib")
-    
-    foreach(ROOT_LIB ${ROOT_LIBS})
-      # Fix zlib paths
-      if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib")
-        execute_process(COMMAND install_name_tool -change 
-                                /opt/local/lib/libz.1.dylib 
-                                ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
-                                ${ROOT_LIB}
-                        ERROR_QUIET)
-      endif()
-      
-      # Fix zstd paths  
-      if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib")
-        execute_process(COMMAND install_name_tool -change 
-                                /opt/local/lib/libzstd.1.dylib 
-                                ${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib 
-                                ${ROOT_LIB}
-                        ERROR_QUIET)
-      endif()
-      
-      # Fix ncurses paths
-      if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib")
-        execute_process(COMMAND install_name_tool -change 
-                                /opt/local/lib/libncurses.6.dylib 
-                                ${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib 
-                                ${ROOT_LIB}
-                        ERROR_QUIET)
-      endif()
-    endforeach()
-    
-    message(STATUS "Fixed keg-only library paths in ROOT libraries")
-  endif()
-endif()
 
 # Set ROOT_CONFIG_EXECUTABLE variable
 find_program(ROOT_CONFIG_EXECUTABLE NAMES root-config HINTS "${TMP_ROOT_PATH}/bin")
