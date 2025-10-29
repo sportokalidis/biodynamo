@@ -102,19 +102,44 @@ set(ENV{ROOTSYS} ${TMP_ROOT_PATH})
 if(APPLE)
   find_program(BREW_BIN brew)
   if(BREW_BIN)
-    # execute_process(COMMAND ${BREW_BIN} --prefix zlib
-    #                 OUTPUT_VARIABLE ZLIB_BREW_PREFIX
-    #                 OUTPUT_STRIP_TRAILING_WHITESPACE
-    #                 ERROR_QUIET)
-    # if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
-    #   execute_process(COMMAND install_name_tool -change 
-    #                           /opt/local/lib/libz.1.dylib 
-    #                           ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
-    #                           ${TMP_ROOT_PATH}/lib/libCling.so
-    #                   ERROR_QUIET)
-    #   message(STATUS "Fixed zlib path in ROOT's libCling.so")
+    execute_process(COMMAND ${BREW_BIN} --prefix zlib
+                    OUTPUT_VARIABLE ZLIB_BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    execute_process(COMMAND ${BREW_BIN} --prefix zstd
+                    OUTPUT_VARIABLE ZSTD_BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    execute_process(COMMAND ${BREW_BIN} --prefix ncurses
+                    OUTPUT_VARIABLE NCURSES_BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+
+    if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
+      execute_process(COMMAND install_name_tool -change 
+                              /opt/local/lib/libz.1.dylib 
+                              ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
+                              ${TMP_ROOT_PATH}/lib/libCling.so
+                      ERROR_QUIET)
+      message(STATUS "Fixed zlib path in ROOT's libCling.so")
     
-    # endif()
+    endif()
+    if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
+      execute_process(COMMAND install_name_tool -change 
+                              /opt/local/lib/libzstd.1.dylib 
+                              ${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib 
+                              ${TMP_ROOT_PATH}/lib/libCling.so
+                      ERROR_QUIET)
+      message(STATUS "Fixed zstd path in ROOT's libCling.so")
+
+    if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libncurses.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
+      execute_process(COMMAND install_name_tool -change 
+                              /opt/local/lib/libncurses.1.dylib 
+                              ${NCURSES_BREW_PREFIX}/lib/libncurses.1.dylib 
+                              ${TMP_ROOT_PATH}/lib/libCling.so
+                      ERROR_QUIET)
+      message(STATUS "Fixed ncurses path in ROOT's libCling.so")
+    endif()
   endif()
 endif()
 
