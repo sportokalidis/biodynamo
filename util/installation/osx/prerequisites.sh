@@ -65,8 +65,6 @@ if [ $1 == "all" ]; then
       $(cat $BDM_PROJECT_DIR/util/installation/osx/package_list_extra) || true
 fi
 
-
-
 # Test installation of brew formulae such that the user gets feedback if 
 # his/her brew installation did not work as expected.
 brew_required=0

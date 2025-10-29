@@ -132,10 +132,10 @@ if(APPLE)
                       ERROR_QUIET)
       message(STATUS "Fixed zstd path in ROOT's libCling.so")
     endif()
-    if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
+    if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
       execute_process(COMMAND install_name_tool -change 
-                              /opt/local/lib/libncurses.1.dylib 
-                              ${NCURSES_BREW_PREFIX}/lib/libncurses.1.dylib 
+                              /opt/local/lib/libncurses.6.dylib 
+                              ${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib 
                               ${TMP_ROOT_PATH}/lib/libCling.so
                       ERROR_QUIET)
       message(STATUS "Fixed ncurses path in ROOT's libCling.so")
