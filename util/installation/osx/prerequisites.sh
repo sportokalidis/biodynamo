@@ -104,6 +104,40 @@ if [ $1 == "all" ]; then
   fi
 fi
 
+# Create symlinks for keg-only packages to ensure compatibility with pre-built ROOT
+echo ""
+echo "Setting up compatibility symlinks for keg-only packages..."
+
+# Create /opt/local/lib directory if it doesn't exist
+if [ ! -d "/opt/local/lib" ]; then
+    sudo mkdir -p /opt/local/lib
+    echo "Created /opt/local/lib directory"
+fi
+
+# Create symlink for zlib (keg-only package)
+if [ -f "/opt/homebrew/opt/zlib/lib/libz.1.dylib" ]; then
+    if [ ! -L "/opt/local/lib/libz.1.dylib" ]; then
+        sudo ln -sf /opt/homebrew/opt/zlib/lib/libz.1.dylib /opt/local/lib/libz.1.dylib
+        echo "Created symlink for zlib: /opt/local/lib/libz.1.dylib -> /opt/homebrew/opt/zlib/lib/libz.1.dylib"
+    else
+        echo "zlib symlink already exists"
+    fi
+else
+    echo "Warning: zlib not found in expected Homebrew location"
+fi
+
+# Create symlink for ncurses (for completeness, similar to CI)
+if [ -f "/opt/homebrew/opt/ncurses/lib/libncurses.6.dylib" ]; then
+    if [ ! -L "/opt/local/lib/libncurses.6.dylib" ]; then
+        sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
+        echo "Created symlink for ncurses: /opt/local/lib/libncurses.6.dylib -> /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib"
+    else
+        echo "ncurses symlink already exists"
+    fi
+else
+    echo "Warning: ncurses not found in expected Homebrew location"
+fi
+
 # Recommend user to upgrade to the latest package versions
 echo ""
 echo "Maybe you have seen errors of the type 'Error: <package> is already" 
