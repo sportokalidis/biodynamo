@@ -36,22 +36,22 @@ jobs:
         sudo mv cmake-3.24.1-macos-universal/CMake.app /Applications/
         sudo ln -sf /Applications/CMake.app/Contents/bin/cmake /usr/local/bin/cmake
 
-    - name: Install zlib
-      run: brew install zlib zstd ncurses
+    # - name: Install zlib
+    #   run: brew install zlib zstd ncurses
 
-    - name: Set zlib env vars
-      run: |
-        echo "LDFLAGS=-L/opt/homebrew/opt/zlib/lib" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I/opt/homebrew/opt/zlib/include" >> $GITHUB_ENV
-        echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+    # - name: Set zlib env vars
+    #   run: |
+    #     echo "LDFLAGS=-L/opt/homebrew/opt/zlib/lib" >> $GITHUB_ENV
+    #     echo "CPPFLAGS=-I/opt/homebrew/opt/zlib/include" >> $GITHUB_ENV
+    #     echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
 
-        export DYLD_LIBRARY_PATH="/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH"
-        echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+    #     export DYLD_LIBRARY_PATH="/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH"
+    #     echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
         
-    - name: Symlink ncurses for compatibility
-      run: |
-        sudo mkdir -p /opt/local/lib
-        sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
+    # - name: Symlink ncurses for compatibility
+    #   run: |
+    #     sudo mkdir -p /opt/local/lib
+    #     sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
 
 
 
