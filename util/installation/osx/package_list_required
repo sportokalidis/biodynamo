@@ -7,3 +7,6 @@ cmake
 ninja
 bash
 qt@5
+zlib
+zstd
+ncurses

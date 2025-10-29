@@ -40,22 +40,22 @@ jobs:
 
         echo "GHA_REPOSITORY=${{ github.repository}}" >> $GITHUB_ENV
 
-    - name: Install zlib
-      run: brew install zlib zstd
+    # - name: Install zlib
+    #   run: brew install zlib zstd
 
-    - name: Set zlib env vars
-      run: |
-        echo "LDFLAGS=-L/opt/homebrew/opt/zlib/lib" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I/opt/homebrew/opt/zlib/include" >> $GITHUB_ENV
-        echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+    # - name: Set zlib env vars
+    #   run: |
+    #     echo "LDFLAGS=-L/opt/homebrew/opt/zlib/lib" >> $GITHUB_ENV
+    #     echo "CPPFLAGS=-I/opt/homebrew/opt/zlib/include" >> $GITHUB_ENV
+    #     echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
 
-        export DYLD_LIBRARY_PATH="/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH"
-        echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+    #     export DYLD_LIBRARY_PATH="/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH"
+    #     echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
 
-    - name: Symlink ncurses for compatibility
-      run: |
-        sudo mkdir -p /opt/local/lib
-        sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
+    # - name: Symlink ncurses for compatibility
+    #   run: |
+    #     sudo mkdir -p /opt/local/lib
+    #     sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
 
 
 
@@ -100,9 +100,9 @@ jobs:
     - name: Build BioDynaMo
       shell: zsh {0}
       run: |
-        export PV_USE_OFFSCREEN=1
-        export QT_QPA_PLATFORM=offscreen
-        export DISPLAY=:0
+        # export PV_USE_OFFSCREEN=1
+        # export QT_QPA_PLATFORM=offscreen
+        # export DISPLAY=:0
         cmake \
           -Dopencl=OFF \
           -Dparaview=ON \
@@ -131,8 +131,8 @@ jobs:
         source $(find /Users -path "*/bin/*" -name "*thisbdm.sh")
         root --version
         root -config
-        export PV_USE_OFFSCREEN=1
-        export QT_QPA_PLATFORM=offscreen
+        # export PV_USE_OFFSCREEN=1
+        # export QT_QPA_PLATFORM=offscreen
         export DISPLAY=:0
         git config --system user.name "Test User"
         git config --system user.email user@test.com
