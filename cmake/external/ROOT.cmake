@@ -98,6 +98,25 @@ find_package(ROOT COMPONENTS Geom Gui GenVector REQUIRED)
 string(REGEX REPLACE "/include$" "" TMP_ROOT_PATH ${ROOT_INCLUDE_DIRS})
 set(ENV{ROOTSYS} ${TMP_ROOT_PATH})
 
+# Fix hardcoded zlib path in pre-built ROOT on macOS
+if(APPLE)
+  find_program(BREW_BIN brew)
+  if(BREW_BIN)
+    execute_process(COMMAND ${BREW_BIN} --prefix zlib
+                    OUTPUT_VARIABLE ZLIB_BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
+      execute_process(COMMAND install_name_tool -change 
+                              /opt/local/lib/libz.1.dylib 
+                              ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
+                              ${TMP_ROOT_PATH}/lib/libCling.so
+                      ERROR_QUIET)
+      message(STATUS "Fixed zlib path in ROOT's libCling.so")
+    endif()
+  endif()
+endif()
+
 # Set ROOT_CONFIG_EXECUTABLE variable
 find_program(ROOT_CONFIG_EXECUTABLE NAMES root-config HINTS "${TMP_ROOT_PATH}/bin")
 SET(ROOT_CONFIG_EXECUTABLE ${ROOT_CONFIG_EXECUTABLE} PARENT_SCOPE)

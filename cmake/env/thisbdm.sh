@@ -247,18 +247,6 @@ _source_thisbdm()
     fi
     export CPPFLAGS="-I$BREWPREFIX/opt/libomp/include $CPPFLAGS"
     export LDFLAGS="-L$BREWPREFIX/opt/libomp/lib $LDFLAGS"
-    
-    # Add zlib to DYLD_LIBRARY_PATH for pre-built ROOT compatibility
-    if [ -n "${DYLD_LIBRARY_PATH}" ]; then
-      _drop_bdm_from_path "$DYLD_LIBRARY_PATH" "$BREWPREFIX/opt/zlib/lib"
-      DYLD_LIBRARY_PATH=$_newpath
-    fi
-    if [ -z "${DYLD_LIBRARY_PATH}" ]; then
-      DYLD_LIBRARY_PATH="$BREWPREFIX/opt/zlib/lib"  
-    else
-      DYLD_LIBRARY_PATH="$BREWPREFIX/opt/zlib/lib:$DYLD_LIBRARY_PATH"
-    fi
-    export DYLD_LIBRARY_PATH
   fi
 
   # paraview versions might be different between OSes
