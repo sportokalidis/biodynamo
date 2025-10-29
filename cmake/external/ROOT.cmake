@@ -98,7 +98,7 @@ find_package(ROOT COMPONENTS Geom Gui GenVector REQUIRED)
 string(REGEX REPLACE "/include$" "" TMP_ROOT_PATH ${ROOT_INCLUDE_DIRS})
 set(ENV{ROOTSYS} ${TMP_ROOT_PATH})
 
-# Fix hardcoded zlib path in pre-built ROOT on macOS
+# Fix hardcoded keg-only library paths in pre-built ROOT on macOS
 if(APPLE)
   find_program(BREW_BIN brew)
   if(BREW_BIN)
@@ -115,31 +115,39 @@ if(APPLE)
                     OUTPUT_STRIP_TRAILING_WHITESPACE
                     ERROR_QUIET)
 
-    if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
-      execute_process(COMMAND install_name_tool -change 
-                              /opt/local/lib/libz.1.dylib 
-                              ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
-                              ${TMP_ROOT_PATH}/lib/libCling.so
-                      ERROR_QUIET)
-      message(STATUS "Fixed zlib path in ROOT's libCling.so")
+    # Get list of all ROOT libraries that might need fixing
+    file(GLOB ROOT_LIBS "${TMP_ROOT_PATH}/lib/*.so" "${TMP_ROOT_PATH}/lib/*.dylib")
     
-    endif()
-    if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
-      execute_process(COMMAND install_name_tool -change 
-                              /opt/local/lib/libzstd.1.dylib 
-                              ${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib 
-                              ${TMP_ROOT_PATH}/lib/libCling.so
-                      ERROR_QUIET)
-      message(STATUS "Fixed zstd path in ROOT's libCling.so")
-    endif()
-    if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib" AND EXISTS "${TMP_ROOT_PATH}/lib/libCling.so")
-      execute_process(COMMAND install_name_tool -change 
-                              /opt/local/lib/libncurses.6.dylib 
-                              ${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib 
-                              ${TMP_ROOT_PATH}/lib/libCling.so
-                      ERROR_QUIET)
-      message(STATUS "Fixed ncurses path in ROOT's libCling.so")
-    endif()
+    foreach(ROOT_LIB ${ROOT_LIBS})
+      # Fix zlib paths
+      if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib")
+        execute_process(COMMAND install_name_tool -change 
+                                /opt/local/lib/libz.1.dylib 
+                                ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
+                                ${ROOT_LIB}
+                        ERROR_QUIET)
+      endif()
+      
+      # Fix zstd paths  
+      if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib")
+        execute_process(COMMAND install_name_tool -change 
+                                /opt/local/lib/libzstd.1.dylib 
+                                ${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib 
+                                ${ROOT_LIB}
+                        ERROR_QUIET)
+      endif()
+      
+      # Fix ncurses paths
+      if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib")
+        execute_process(COMMAND install_name_tool -change 
+                                /opt/local/lib/libncurses.6.dylib 
+                                ${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib 
+                                ${ROOT_LIB}
+                        ERROR_QUIET)
+      endif()
+    endforeach()
+    
+    message(STATUS "Fixed keg-only library paths in ROOT libraries")
   endif()
 endif()
 
