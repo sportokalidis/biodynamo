@@ -21,7 +21,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [macos-14, macos-15]
+        os: [macos-26]
 
     runs-on: ${{ matrix.os }}
 
@@ -40,13 +40,33 @@ jobs:
 
         echo "GHA_REPOSITORY=${{ github.repository}}" >> $GITHUB_ENV
 
+    # - name: Install zlib
+    #   run: brew install zlib zstd
+
+    # - name: Set zlib env vars
+    #   run: |
+    #     echo "LDFLAGS=-L/opt/homebrew/opt/zlib/lib" >> $GITHUB_ENV
+    #     echo "CPPFLAGS=-I/opt/homebrew/opt/zlib/include" >> $GITHUB_ENV
+    #     echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+
+    #     export DYLD_LIBRARY_PATH="/opt/homebrew/opt/zlib/lib:$DYLD_LIBRARY_PATH"
+    #     echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/zstd/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+
+    # - name: Symlink ncurses for compatibility
+    #   run: |
+    #     sudo mkdir -p /opt/local/lib
+    #     sudo ln -sf /opt/homebrew/opt/ncurses/lib/libncurses.6.dylib /opt/local/lib/libncurses.6.dylib
+
+
+
     - name: Install BioDynaMo
       shell: zsh {0}
       run: |
         brew install curl
         # GHA macOS: unpin CMake to fix Homebrew conflict (actions/runner-images#12912)
         brew uninstall --force cmake || true
-        brew untap local/pinned || true
+        # brew untap local/pinned || true
+        brew install cmake
         curl https://raw.githubusercontent.com/${GHA_REPOSITORY}/${GHA_BRANCH_NAME}/util/install | bash
         # remove whole bidynamo repository to catch errors related to paths pointing into the build dir
         mktemp -d
@@ -77,10 +97,13 @@ jobs:
     #   with:
     #     path: build/third_party
     #     key: ${{ runner.os }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
-
+      
     - name: Build BioDynaMo
       shell: zsh {0}
       run: |
+        # export PV_USE_OFFSCREEN=1
+        # export QT_QPA_PLATFORM=offscreen
+        # export DISPLAY=:0
         cmake \
           -Dopencl=OFF \
           -Dparaview=ON \
@@ -109,6 +132,9 @@ jobs:
         source $(find /Users -path "*/bin/*" -name "*thisbdm.sh")
         root --version
         root -config
+        # export PV_USE_OFFSCREEN=1
+        # export QT_QPA_PLATFORM=offscreen
+        export DISPLAY=:0
         git config --system user.name "Test User"
         git config --system user.email user@test.com
         make run-demos

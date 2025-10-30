@@ -322,6 +322,64 @@ find_package(Git)
 find_package(ROOT COMPONENTS Geom Gui GenVector)
 verify_ROOT()
 
+# Fix hardcoded keg-only library paths in ROOT on macOS
+if(APPLE)
+  find_program(BREW_BIN brew)
+  if(BREW_BIN AND ROOT_INCLUDE_DIRS)
+    execute_process(COMMAND ${BREW_BIN} --prefix zlib
+                    OUTPUT_VARIABLE ZLIB_BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    execute_process(COMMAND ${BREW_BIN} --prefix zstd
+                    OUTPUT_VARIABLE ZSTD_BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    execute_process(COMMAND ${BREW_BIN} --prefix ncurses
+                    OUTPUT_VARIABLE NCURSES_BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+
+    # Get ROOT library directory
+    string(REGEX REPLACE "/include$" "/lib" ROOT_LIB_DIR ${ROOT_INCLUDE_DIRS})
+    
+    # Get list of all ROOT libraries that might need fixing
+    file(GLOB ROOT_LIBS "${ROOT_LIB_DIR}/*.so" "${ROOT_LIB_DIR}/*.dylib")
+    
+    if(ROOT_LIBS)
+      foreach(ROOT_LIB ${ROOT_LIBS})
+        # Fix zlib paths
+        if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib")
+          execute_process(COMMAND install_name_tool -change 
+                                  /opt/local/lib/libz.1.dylib 
+                                  ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
+                                  ${ROOT_LIB}
+                          ERROR_QUIET)
+        endif()
+        
+        # Fix zstd paths  
+        if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib")
+          execute_process(COMMAND install_name_tool -change 
+                                  /opt/local/lib/libzstd.1.dylib 
+                                  ${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib 
+                                  ${ROOT_LIB}
+                          ERROR_QUIET)
+        endif()
+        
+        # Fix ncurses paths
+        if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib")
+          execute_process(COMMAND install_name_tool -change 
+                                  /opt/local/lib/libncurses.6.dylib 
+                                  ${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib 
+                                  ${ROOT_LIB}
+                          ERROR_QUIET)
+        endif()
+      endforeach()
+      
+      message(STATUS "Fixed keg-only library paths in ROOT libraries")
+    endif()
+  endif()
+endif()
+
 if (dict)
   add_definitions("-DUSE_DICT")
 endif()

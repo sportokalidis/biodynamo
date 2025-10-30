@@ -117,7 +117,7 @@ def WritePvsmFile(build_info):
 
     # This avoid the error: Inconsistency detected by ld.so
     # See: https://discourse.paraview.org/t/inconsistency-detected-by-ld-so/3778
-    Show(Cone())
+    # Show(Cone())
 
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':
