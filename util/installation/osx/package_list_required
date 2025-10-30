@@ -4,6 +4,9 @@ open-mpi
 python@3.9
 wget
 cmake
+ncurses
 ninja
 bash
 qt@5
+zlib
+zstd

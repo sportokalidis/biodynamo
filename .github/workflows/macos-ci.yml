@@ -14,7 +14,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [macos-14, macos-15]
+        os: [macos-14, macos-15, macos-26]
 
     runs-on: ${{ matrix.os }}
 
@@ -25,8 +25,8 @@ jobs:
 
         # GHA macOS: unpin CMake to fix Homebrew conflict (actions/runner-images#12912)
         brew uninstall --force cmake || true
-        brew untap local/pinned || true
-        brew install libomp open-mpi python@3.9 wget cmake ninja qt@5 libgit2
+        # brew untap local/pinned || true
+        brew install libomp open-mpi python@3.9 wget cmake ninja qt@5 libgit2 zlib ncurses
 
 
         wget https://cmake.org/files/v3.24/cmake-3.24.1-macos-universal.tar.gz
