@@ -113,7 +113,7 @@ function(verify_ROOT)
         # When ROOT is found, but it's not C++17 compliant, we exit the installation, because ROOT needs
         # to be properly sourced prior to invoking CMake (CMake cannot do this for us, because it requires
         # reverting the previous find_package() call, which is not possible.)
-        if(NOT ROOT_cxx23_FOUND)
+        if(NOT ROOT_cxx17_FOUND)
           message(FATAL_ERROR "The ROOT installation found in ${ROOTSYS} is not C++17 compliant. "
             "Please unset ROOTSYS and re-run cmake so that a compatible version of ROOT will be downloaded.")
         endif()
