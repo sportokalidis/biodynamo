@@ -139,6 +139,7 @@ option(cuda      "Enable CUDA code generation for GPU acceleration" OFF)
 option(opencl    "Enable OpenCL code generation for GPU acceleration" OFF)
 option(dict      "Build with ROOT dictionaries" ON)
 option(paraview  "Enable ParaView" ON)
+option(standalone_visualization "Enable standalone VTU/PVTU exporter (no ParaView/Qt)" OFF)
 option(notebooks "Generate BioDynaMo notebooks" OFF)
 option(numa      "Enable NUMA-awareness in BioDynaMo." ON)
 option(sbml      "Enable SBML" OFF)
@@ -258,7 +259,7 @@ if(APPLE)
 endif()
 
 # Check if GLUT is present. If we do not have it, then we disable directly paraview.
-if(paraview)
+if(paraview AND NOT standalone_visualization)
   find_package(GLUT)
   if(NOT GLUT_FOUND)
       PRINT_WARNING()
@@ -590,6 +591,9 @@ file(GLOB_RECURSE KERNELS "${CMAKE_SOURCE_DIR}/src/*.cu")
 # plugin upon request
 filter_list(LIB_SOURCES "${LIB_SOURCES}" "paraview/*")
 filter_list(HEADERS "${HEADERS}" "paraview/*")
+# Exclude standalone visualization adaptor from core lib; it's built as plugin
+filter_list(LIB_SOURCES "${LIB_SOURCES}" "standalone/*")
+filter_list(HEADERS "${HEADERS}" "standalone/*")
 
 build_shared_library(biodynamo
                    SELECTION selection-libbiodynamo.xml
@@ -633,6 +637,26 @@ endif()
 if(${VTune_FOUND})
   target_link_libraries(biodynamo ${VTUNE_LIBRARIES})
   add_definitions("-DUSE_VTUNE")
+endif()
+
+# Build standalone visualization adaptor (no ParaView/Qt dependencies)
+if(standalone_visualization)
+  message(STATUS "Building standalone visualization adaptor (ParaView disabled)")
+  file(GLOB_RECURSE SA_HEADERS "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.h")
+  file(GLOB_RECURSE SA_SOURCES "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.cc")
+
+  build_shared_library(VisualizationAdaptor
+                    SELECTION selection-libVisualizationAdaptor.xml
+                    SOURCES ${SA_SOURCES}
+                    HEADERS ${SA_HEADERS}
+                    LIBRARIES biodynamo
+                    PLUGIN "TRUE")
+
+  if(LINUX)
+    SET_TARGET_PROPERTIES(VisualizationAdaptor PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
+  else()
+    SET_TARGET_PROPERTIES(VisualizationAdaptor PROPERTIES LINK_FLAGS "-dynamic")
+  endif()
 endif()
 
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1 CACHE BOOL "Suppress cmake development warnings")
@@ -844,7 +868,7 @@ else()
   set(pyenvroot "")
 endif()
 set(with_paraview ON)
-if(NOT paraview)
+if(NOT paraview OR standalone_visualization)
   set(with_paraview OFF)
 endif()
 
