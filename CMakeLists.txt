@@ -322,6 +322,31 @@ find_package(Git)
 find_package(ROOT COMPONENTS Geom Gui GenVector)
 verify_ROOT()
 
+# Align C++ standard with ROOT's configured standard to avoid mismatches
+# e.g., ROOT 6.36.06 on newer macOS toolchains may require C++23
+if(ROOT_FOUND)
+  if(DEFINED ROOT_cxx23_FOUND AND ROOT_cxx23_FOUND)
+    set(BDM_CXX_STANDARD 23)
+  elseif(DEFINED ROOT_cxx20_FOUND AND ROOT_cxx20_FOUND)
+    set(BDM_CXX_STANDARD 20)
+  elseif(DEFINED ROOT_cxx17_FOUND AND ROOT_cxx17_FOUND)
+    set(BDM_CXX_STANDARD 17)
+  endif()
+  # Fallback: parse root-config cflags if features did not indicate standard
+  if(NOT DEFINED BDM_CXX_STANDARD AND DEFINED ROOT_CXX_FLAGS)
+    if("${ROOT_CXX_FLAGS}" MATCHES "-std=c\\+\\+23")
+      set(BDM_CXX_STANDARD 23)
+    elseif("${ROOT_CXX_FLAGS}" MATCHES "-std=c\\+\\+20")
+      set(BDM_CXX_STANDARD 20)
+    elseif("${ROOT_CXX_FLAGS}" MATCHES "-std=c\\+\\+17")
+      set(BDM_CXX_STANDARD 17)
+    endif()
+  endif()
+  if(DEFINED BDM_CXX_STANDARD)
+    message(STATUS "Setting C++ standard to match ROOT: C++${BDM_CXX_STANDARD}")
+  endif()
+endif()
+
 # Fix hardcoded keg-only library paths in ROOT on macOS
 if(APPLE)
   find_program(BREW_BIN brew)
