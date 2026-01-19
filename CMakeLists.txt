@@ -347,6 +347,16 @@ if(ROOT_FOUND)
   endif()
 endif()
 
+# Final fallback for recent macOS toolchains: Xcode 26.x ROOT builds use C++23
+if(APPLE AND NOT DEFINED BDM_CXX_STANDARD)
+  execute_process(COMMAND bash "-c" "xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9\.]*)/\\1/p' | tr -d '\n'"
+                  OUTPUT_VARIABLE XCODE_VERS)
+  if("${XCODE_VERS}" GREATER_EQUAL "26.0")
+    set(BDM_CXX_STANDARD 23)
+    message(STATUS "Xcode ${XCODE_VERS} detected; defaulting to C++23 to match ROOT")
+  endif()
+endif()
+
 # Fix hardcoded keg-only library paths in ROOT on macOS
 if(APPLE)
   find_program(BREW_BIN brew)
