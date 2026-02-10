@@ -46,6 +46,16 @@ jobs:
       run: |
         sudo xcode-select -s /Library/Developer/CommandLineTools
         xcode-select --print-path
+    - name: Fix Xcode Selection (The Solution)
+      run: |
+        # Explicitly select the Xcode application developer directory
+        # This fixes the "xcodebuild requires Xcode" error
+        sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        
+        # Verify it points to the right place
+        xcode-select --print-path
+        # Verify xcodebuild now works
+        xcodebuild -version
 
     - name: Install BioDynaMo
       shell: zsh {0}
