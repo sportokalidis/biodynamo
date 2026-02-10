@@ -24,6 +24,8 @@ jobs:
         os: [macos-14, macos-15]
 
     runs-on: ${{ matrix.os }}
+    env:
+      DEVELOPER_DIR: /Library/Developer/CommandLineTools
 
     steps:
     - name: Set GHA_BRANCH_NAME
@@ -39,6 +41,11 @@ jobs:
         fi
 
         echo "GHA_REPOSITORY=${{ github.repository}}" >> $GITHUB_ENV
+    - name: Select Command Line Tools
+      shell: zsh {0}
+      run: |
+        sudo xcode-select -s /Library/Developer/CommandLineTools
+        xcode-select --print-path
 
     - name: Install BioDynaMo
       shell: zsh {0}
