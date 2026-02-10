@@ -17,8 +17,8 @@ jobs:
         os: [macos-14, macos-15]
 
     runs-on: ${{ matrix.os }}
-    env:
-      DEVELOPER_DIR: /Library/Developer/CommandLineTools
+    # env:
+    #   DEVELOPER_DIR: /Library/Developer/CommandLineTools
 
     steps:
     - name: Select Command Line Tools
