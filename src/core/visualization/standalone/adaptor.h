@@ -11,6 +11,7 @@ class StandaloneVtuExporter;
 
 class StandaloneAdaptor : public VisualizationAdaptor {
  public:
+  static StandaloneAdaptor* Factory();
   StandaloneAdaptor();
   ~StandaloneAdaptor() override;
 

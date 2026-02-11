@@ -122,6 +122,9 @@ void ParaviewAdaptor::Visualize() {
 }
 
 // ----------------------------------------------------------------------------
+ParaviewAdaptor* ParaviewAdaptor::Factory() { return new ParaviewAdaptor(); }
+
+// ----------------------------------------------------------------------------
 void ParaviewAdaptor::Initialize() {
   auto* sim = Simulation::GetActive();
   auto* param = sim->GetParam();

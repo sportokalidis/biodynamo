@@ -5,6 +5,8 @@
 
 namespace bdm {
 
+StandaloneAdaptor* StandaloneAdaptor::Factory() { return new StandaloneAdaptor(); }
+
 StandaloneAdaptor::StandaloneAdaptor() = default;
 StandaloneAdaptor::~StandaloneAdaptor() {
   delete exporter_;
@@ -19,6 +21,7 @@ void StandaloneAdaptor::Visualize() {
     initialized_ = true;
   }
   exporter_->WriteStep();
+  exporter_->WriteDiffusionStep();
 }
 
 }  // namespace bdm
