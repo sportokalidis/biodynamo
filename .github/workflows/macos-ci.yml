@@ -66,7 +66,7 @@ jobs:
         bdm config
         # Run tests with specific filter to exclude problematic ParaView test on macOS-26
         if [[ "${{ matrix.os }}" == "macos-26" ]]; then
-          ./bin/biodynamo-unit-tests --gtest_filter=-ParaviewAdaptorTest.CheckVisualizationSelection
+          ./bin/biodynamo-unit-tests 
         else
           ninja run-unit-tests
         fi
