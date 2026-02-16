@@ -19,10 +19,12 @@
 #include "core/simulation.h"
 #include "core/util/log.h"
 #include "core/visualization/visualization_adaptor.h"
+#include "core/visualization/standalone/adaptor.h"
 
 #include "TInterpreter.h"
 #include "TPluginManager.h"
 #include "TROOT.h"
+#include "TEnv.h"
 
 namespace bdm {
 
@@ -38,11 +40,24 @@ VisualizationAdaptor *VisualizationAdaptor::Create(const std::string &adaptor) {
     return nullptr;
   }
   VisualizationAdaptor *va = nullptr;
+  // Ensure ROOT reads BioDynaMo plugin configuration
+  const char* bdmsys = std::getenv("BDMSYS");
+  if (bdmsys) {
+    std::string rc = std::string(bdmsys) + "/etc/bdm.rootrc";
+    gEnv->ReadFile(rc.c_str(), kEnvUser);
+  }
   bool first_try = !loaded_.count(adaptor);
   // If this is the first time we try to load `adaptor`
   if (first_try) {
     // Try to find plugin handler in etc/plugins
     auto *h = gPluginMgr->FindHandler("VisualizationAdaptor", adaptor.c_str());
+    // If not found via plugin maps, register handler programmatically
+    if (!h && adaptor == "standalone") {
+      gPluginMgr->AddHandler("VisualizationAdaptor", "standalone",
+                             "bdm::StandaloneAdaptor", "VisualizationAdaptor",
+                             "Factory()");
+      h = gPluginMgr->FindHandler("VisualizationAdaptor", adaptor.c_str());
+    }
     if (h) {
       // Try to load the plugin (dynamically load shared library)
       if (h->LoadPlugin() == 0) {
