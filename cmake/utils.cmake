@@ -110,11 +110,12 @@ function(verify_ROOT)
         SET(ROOTCLING_EXECUTABLE ${ROOTCLING_EXECUTABLE} PARENT_SCOPE)
         SET(GENREFLEX_EXECUTABLE ${GENREFLEX_EXECUTABLE} PARENT_SCOPE)
     else()
-        # When ROOT is found, but it's not C++17 compliant, we exit the installation, because ROOT needs
-        # to be properly sourced prior to invoking CMake (CMake cannot do this for us, because it requires
-        # reverting the previous find_package() call, which is not possible.)
-        if(NOT ROOT_cxx17_FOUND)
-          message(FATAL_ERROR "The ROOT installation found in ${ROOTSYS} is not C++17 compliant. "
+        # When ROOT is found, but it's not C++17 (or newer) compliant, we exit the installation,
+        # because ROOT needs to be properly sourced prior to invoking CMake (CMake cannot do this
+        # for us, because it requires reverting the previous find_package() call, which is not possible.)
+        # Accept C++17, C++20, or C++23 (e.g. ROOT 6.36+ on Xcode 26.x uses C++23).
+        if(NOT (ROOT_cxx17_FOUND OR ROOT_cxx20_FOUND OR ROOT_cxx23_FOUND))
+          message(FATAL_ERROR "The ROOT installation found in ${ROOTSYS} is not C++17 (or newer) compliant. "
             "Please unset ROOTSYS and re-run cmake so that a compatible version of ROOT will be downloaded.")
         endif()
 
