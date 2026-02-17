@@ -254,25 +254,14 @@ void ParaviewAdaptor::GenerateParaviewState() {
   std::string pv_dir = std::getenv("ParaView_DIR");
   std::string bdmsys = std::getenv("BDMSYS");
 
-  python_cmd << pv_dir << "/bin/pvbatch --force-offscreen-rendering " << bdmsys
+  python_cmd << pv_dir << "/bin/pvbatch " << bdmsys
              << "/include/core/visualization/paraview/generate_pv_state.py "
              << sim->GetOutputDir() << "/" << kSimulationInfoJson;
   int ret_code = system(python_cmd.str().c_str());
   if (ret_code) {
-#ifdef __APPLE__
-    // On macOS, pvbatch may crash (SIGSEGV) on headless systems (e.g. CI)
-    // due to missing OpenGL context (NSOpenGLContext removed in macOS 26).
-    // The .pvsm state file may still have been saved before the crash.
-    Log::Warning("ParaviewAdaptor::GenerateParaviewState",
-                 "Error during generation of ParaView state "
-                 "(pvbatch exited with code ",
-                 ret_code, "). The .pvsm state file may be incomplete.\n",
-                 "Command\n", python_cmd.str());
-#else
     Log::Fatal("ParaviewAdaptor::GenerateParaviewState",
                "Error during generation of ParaView state\n", "Command\n",
                python_cmd.str());
-#endif
   }
 }
 

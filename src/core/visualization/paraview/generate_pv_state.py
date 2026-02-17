@@ -102,32 +102,22 @@ def BuildDefaultPipeline(json_filename):
 
     # get animation scene
     animation_scene = GetAnimationScene()
+    # update animation scene based on data timesteps
+    animation_scene.UpdateAnimationUsingDataTimeSteps()
 
-    return build_info, animation_scene
+    return build_info
 
 # ------------------------------------------------------------------------------
-def WritePvsmFile(build_info, animation_scene):
+def WritePvsmFile(build_info):
     sim_info = build_info['simulation']
     result_dir = sim_info['result_dir']
 
     os.chdir(result_dir)
     SaveState('{0}.pvsm'.format(sim_info['name']))
 
-    # Update animation scene based on data timesteps.
-    # On headless macOS (e.g. macOS 26 CI), this triggers a render pass
-    # that may crash due to missing OpenGL context (NSOpenGLContext removed).
-    # The state file has already been saved above, so a crash here is non-fatal.
-    try:
-        animation_scene.UpdateAnimationUsingDataTimeSteps()
-    except Exception as e:
-        print('Warning: UpdateAnimationUsingDataTimeSteps failed: {0}'.format(e))
-
     # This avoid the error: Inconsistency detected by ld.so
     # See: https://discourse.paraview.org/t/inconsistency-detected-by-ld-so/3778
-    try:
-        Show(Cone())
-    except Exception:
-        pass
+    Show(Cone())
 
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -138,6 +128,6 @@ if __name__ == '__main__':
     json_filename = arguments[0]
 
 
-    build_info, animation_scene = BuildDefaultPipeline(json_filename)
-    WritePvsmFile(build_info, animation_scene)    
+    build_info = BuildDefaultPipeline(json_filename)
+    WritePvsmFile(build_info)    
     
