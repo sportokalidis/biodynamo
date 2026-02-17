@@ -265,8 +265,8 @@ void ParaviewAdaptor::GenerateParaviewState() {
     // The .pvsm state file may still have been saved before the crash.
     Log::Warning("ParaviewAdaptor::GenerateParaviewState",
                  "Error during generation of ParaView state "
-                 "(pvbatch exited with code ", ret_code,
-                 "). The .pvsm state file may be incomplete.\n",
+                 "(pvbatch exited with code ",
+                 ret_code, "). The .pvsm state file may be incomplete.\n",
                  "Command\n", python_cmd.str());
 #else
     Log::Fatal("ParaviewAdaptor::GenerateParaviewState",
