@@ -21,7 +21,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [macos-14, macos-15]
+        os: [macos-26]
 
     runs-on: ${{ matrix.os }}
 
@@ -46,7 +46,10 @@ jobs:
         brew install curl
         # GHA macOS: unpin CMake to fix Homebrew conflict (actions/runner-images#12912)
         brew uninstall --force cmake || true
-        brew untap local/pinned || true
+        # local/pinned tap does not exist on macOS-26 runners
+        if [[ "${{ matrix.os }}" != "macos-26" ]]; then
+          brew untap local/pinned || true
+        fi
         curl https://raw.githubusercontent.com/${GHA_REPOSITORY}/${GHA_BRANCH_NAME}/util/install | bash
         # remove whole bidynamo repository to catch errors related to paths pointing into the build dir
         mktemp -d
