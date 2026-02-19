@@ -21,6 +21,8 @@ liblzma-dev
 libreadline-dev
 libsqlite3-dev
 libssl-dev
+libtbb-dev
+libtbb12
 python3-openssl
 tk-dev
 xz-utils
