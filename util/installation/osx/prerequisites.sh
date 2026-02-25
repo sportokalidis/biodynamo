@@ -60,7 +60,7 @@ if [ $1 == "all" ]; then
     # macOS System CI.
     PIP_PACKAGES="markupsafe==2.0.1 nbformat jupyter metakernel jupyterlab jinja2==3.0"
     # Don't install --user: the packages should end up in the PYENV_ROOT directory
-    python3.9 -m pip install $PIP_PACKAGES
+    python3 -m pip install $PIP_PACKAGES
     brew install \
       $(cat $BDM_PROJECT_DIR/util/installation/osx/package_list_extra) || true
 fi
