@@ -152,6 +152,7 @@ option(website   "Enable website generation (make website<-live>)." OFF)
 option(valgrind  "Enable valgrind tests and make build compatible with valgrind tool." ON)
 option(rpath     "Link libraries with built-in RPATH (run-time search path)." OFF)
 option(real_t    "Define data type for real numbers. Currently supported: float, double" double)
+option(boost     "Enable Boost-based behaviors (e.g. RegulatoryNetwork)." ON)
 
 if(APPLE)
   # ParaView on Apple devices
@@ -189,6 +190,19 @@ else()
 endif()
 
 # -------------------- find packages ------------------------------------------
+if(boost)
+  find_package(Boost)
+  if(Boost_FOUND)
+    include_directories(${Boost_INCLUDE_DIRS})
+    add_definitions("-DUSE_BOOST")
+    message(STATUS "Boost found: ${Boost_INCLUDE_DIRS}")
+  else()
+    message(WARNING "Boost not found. Boost-based behaviors (e.g. RegulatoryNetwork) will be disabled. "
+                    "Install libboost-dev (apt), boost (brew), or boost-devel (yum) to enable, or disable with -Dboost=OFF.")
+    set(boost OFF)
+  endif()
+endif()
+
 if (tcmalloc)
   find_package(tcmalloc)
   if(NOT TCMALLOC_FOUND)
@@ -321,99 +335,6 @@ find_package(Git)
 # Find ROOT and check its installation
 find_package(ROOT COMPONENTS Geom Gui GenVector)
 verify_ROOT()
-
-# Align C++ standard with ROOT's configured standard to avoid mismatches
-# e.g., ROOT 6.36.06 on newer macOS toolchains may require C++23
-if(ROOT_FOUND)
-  if(DEFINED ROOT_cxx23_FOUND AND ROOT_cxx23_FOUND)
-    set(BDM_CXX_STANDARD 23)
-  elseif(DEFINED ROOT_cxx20_FOUND AND ROOT_cxx20_FOUND)
-    set(BDM_CXX_STANDARD 20)
-  elseif(DEFINED ROOT_cxx17_FOUND AND ROOT_cxx17_FOUND)
-    set(BDM_CXX_STANDARD 17)
-  endif()
-  # Fallback: parse root-config cflags if features did not indicate standard
-  if(NOT DEFINED BDM_CXX_STANDARD AND DEFINED ROOT_CXX_FLAGS)
-    if("${ROOT_CXX_FLAGS}" MATCHES "-std=c\\+\\+23")
-      set(BDM_CXX_STANDARD 23)
-    elseif("${ROOT_CXX_FLAGS}" MATCHES "-std=c\\+\\+20")
-      set(BDM_CXX_STANDARD 20)
-    elseif("${ROOT_CXX_FLAGS}" MATCHES "-std=c\\+\\+17")
-      set(BDM_CXX_STANDARD 17)
-    endif()
-  endif()
-  if(DEFINED BDM_CXX_STANDARD)
-    message(STATUS "Setting C++ standard to match ROOT: C++${BDM_CXX_STANDARD}")
-  endif()
-endif()
-
-# Final fallback for recent macOS toolchains: Xcode 26.x ROOT builds use C++23
-if(APPLE AND NOT DEFINED BDM_CXX_STANDARD)
-  execute_process(COMMAND bash "-c" "xcodebuild -version | sed -En 's/Xcode[[:space:]]+([0-9\.]*)/\\1/p' | tr -d '\n'"
-                  OUTPUT_VARIABLE XCODE_VERS)
-  if("${XCODE_VERS}" GREATER_EQUAL "26.0")
-    set(BDM_CXX_STANDARD 23)
-    message(STATUS "Xcode ${XCODE_VERS} detected; defaulting to C++23 to match ROOT")
-  endif()
-endif()
-
-# Fix hardcoded keg-only library paths in ROOT on macOS
-if(APPLE)
-  find_program(BREW_BIN brew)
-  if(BREW_BIN AND ROOT_INCLUDE_DIRS)
-    execute_process(COMMAND ${BREW_BIN} --prefix zlib
-                    OUTPUT_VARIABLE ZLIB_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-    execute_process(COMMAND ${BREW_BIN} --prefix zstd
-                    OUTPUT_VARIABLE ZSTD_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-    execute_process(COMMAND ${BREW_BIN} --prefix ncurses
-                    OUTPUT_VARIABLE NCURSES_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-
-    # Get ROOT library directory
-    string(REGEX REPLACE "/include$" "/lib" ROOT_LIB_DIR ${ROOT_INCLUDE_DIRS})
-
-    # Get list of all ROOT libraries that might need fixing
-    file(GLOB ROOT_LIBS "${ROOT_LIB_DIR}/*.so" "${ROOT_LIB_DIR}/*.dylib")
-
-    if(ROOT_LIBS)
-      foreach(ROOT_LIB ${ROOT_LIBS})
-        # Fix zlib paths
-        if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib")
-          execute_process(COMMAND install_name_tool -change 
-                                  /opt/local/lib/libz.1.dylib 
-                                  ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
-                                  ${ROOT_LIB}
-                          ERROR_QUIET)
-        endif()
-
-        # Fix zstd paths  
-        if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib")
-          execute_process(COMMAND install_name_tool -change 
-                                  /opt/local/lib/libzstd.1.dylib 
-                                  ${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib 
-                                  ${ROOT_LIB}
-                          ERROR_QUIET)
-        endif()
-
-        # Fix ncurses paths
-        if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib")
-          execute_process(COMMAND install_name_tool -change 
-                                  /opt/local/lib/libncurses.6.dylib 
-                                  ${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib 
-                                  ${ROOT_LIB}
-                          ERROR_QUIET)
-        endif()
-      endforeach()
-
-      message(STATUS "Fixed keg-only library paths in ROOT libraries")
-    endif()
-  endif()
-endif()
 
 if (dict)
   add_definitions("-DUSE_DICT")

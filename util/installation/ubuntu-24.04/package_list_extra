@@ -2,8 +2,6 @@ clang
 clang-format
 clang-tidy
 doxygen
-g++-11
-gcc-11
 graphviz
 libxml2-dev
 llvm-14
@@ -11,3 +9,4 @@ llvm-14-dev
 llvm-14-runtime
 valgrind
 libgsl-dev
+libboost-dev

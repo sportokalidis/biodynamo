@@ -2,4 +2,5 @@ doxygen
 graphviz
 kcov
 gsl
+boost
 libgit2

@@ -30,6 +30,9 @@
 #include "core/behavior/chemotaxis.h"
 #include "core/behavior/gene_regulation.h"
 #include "core/behavior/growth_division.h"
+#ifdef USE_BOOST
+#include "core/behavior/regulatory_network.h"
+#endif
 #include "core/behavior/secretion.h"
 #include "core/behavior/stateless_behavior.h"
 #include "core/environment/environment.h"

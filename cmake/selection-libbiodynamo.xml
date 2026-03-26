@@ -39,6 +39,7 @@
     <class name="bdm::Secretion"/>
     <class name="bdm::IntegralTypeWrapper<size_t> "/>
     <class name="bdm::GeneRegulation" />
+    <class name="bdm::RegulatoryNetwork" />
     <class name="bdm::Param" />
     <class name="bdm::ParamGroup" />
     <class name="unordered_map<unsigned long,bdm::ParamGroup*>" />
