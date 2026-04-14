@@ -22,6 +22,25 @@ from build_command import BuildCommand
 ## the simulation template. Note that we ignore the configuration in bdm.json.
 def ViewCommand(file_id=None):
     Print.success("<bdm view> Opening previous simulation results ...")
+
+    # `bdm view` is an interactive ParaView GUI command.
+    # In Docker headless mode we deliberately run with Xvfb (DISPLAY=:99),
+    # which would start ParaView on a virtual screen that the user cannot see.
+    # Fail fast with clear instructions instead of appearing to hang.
+    if os.environ.get("BDM_HEADLESS") == "1":
+        Print.error(
+            "<bdm view> Interactive ParaView GUI is not available in headless mode."
+        )
+        print(
+            "<bdm view> Restart the container in GUI mode to see ParaView windows:"
+        )
+        print("<bdm view>   xhost +local:docker")
+        print("<bdm view>   ./docker/scripts/run_container.sh --gui")
+        print(
+            "<bdm view> Or keep headless mode and use pvbatch/pvpython for exports."
+        )
+        sys.exit(1)
+
     # 1. Check if paraview is installed and if not, return
     bdmsys = os.environ.get("BDMSYS")
     if bdmsys is None:
