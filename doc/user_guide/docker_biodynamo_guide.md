@@ -11,15 +11,16 @@ manual compilation needed.
 1. [What is Docker?](#1-what-is-docker)
 2. [Prerequisites](#2-prerequisites)
 3. [Installing Docker on Linux](#3-installing-docker-on-linux)
-4. [Building the BioDynaMo Image](#4-building-the-biodynamo-image)
-5. [Running a Container](#5-running-a-container)
-6. [Entering the Container](#6-entering-the-container)
-7. [Verifying BioDynaMo Works](#7-verifying-biodynamo-works)
-8. [Running a Demo Simulation](#8-running-a-demo-simulation)
-9. [Visualization and ParaView](#9-visualization-and-paraview)
-10. [Troubleshooting](#10-troubleshooting)
-11. [Cleanup](#11-cleanup)
-12. [Reference: All Commands at a Glance](#12-reference-all-commands-at-a-glance)
+4. [Pulling a Prebuilt Image (Recommended)](#4-pulling-a-prebuilt-image-recommended)
+5. [Building the BioDynaMo Image (Optional)](#5-building-the-biodynamo-image-optional)
+6. [Running a Container](#6-running-a-container)
+7. [Entering the Container](#7-entering-the-container)
+8. [Verifying BioDynaMo Works](#8-verifying-biodynamo-works)
+9. [Running a Demo Simulation](#9-running-a-demo-simulation)
+10. [Visualization and ParaView](#10-visualization-and-paraview)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Cleanup](#12-cleanup)
+13. [Reference: All Commands at a Glance](#13-reference-all-commands-at-a-glance)
 
 ---
 
@@ -47,8 +48,8 @@ Key concepts:
 |-------------|-----|
 | **Linux** (Ubuntu 20.04+ recommended) | This guide targets Linux. macOS and Windows (WSL2) should also work but are not covered here. |
 | **Docker Engine** | The container runtime, see installation below. |
-| **At least 16 GB RAM** | BioDynaMo's build is memory-intensive. |
-| **At least 30 GB free disk space** | The image + build artifacts need significant space. |
+| **At least 8 GB RAM** | BioDynaMo's build is memory-intensive. |
+| **At least 20 GB free disk space** | The image + build artifacts need significant space. |
 | **Internet connection** | Required during image build to download dependencies (CMake, PyEnv, ROOT, ParaView). |
 
 ---
@@ -104,7 +105,39 @@ If you see "Hello from Docker!", the installation is working.
 
 ---
 
-## 4. Building the BioDynaMo Image
+## 4. Pulling a Prebuilt Image (Recommended)
+
+The optimum distribution model is to publish versioned BioDynaMo images to a
+registry (for example GitHub Container Registry), then users only run
+`docker pull`.
+
+Default published image naming in this repository setup:
+
+```bash
+ghcr.io/<github-owner>/biodynamo:<tag>
+```
+
+Examples:
+
+```bash
+# Pull latest stable image
+./docker/scripts/pull_image.sh --image ghcr.io/biodynamo/biodynamo --tag latest
+
+# Pull a specific version
+./docker/scripts/pull_image.sh --image ghcr.io/biodynamo/biodynamo --tag v1.5.0
+```
+
+Run a pulled image:
+
+```bash
+./docker/scripts/run_container.sh --image ghcr.io/biodynamo/biodynamo:latest
+```
+
+This path avoids local compilation completely for end users.
+
+---
+
+## 5. Building the BioDynaMo Image (Optional)
 
 Navigate to the root of the BioDynaMo repository:
 
@@ -152,7 +185,7 @@ To force a clean rebuild:
 
 ---
 
-## 5. Running a Container
+## 6. Running a Container
 
 ### Headless Mode (default, recommended)
 
@@ -216,7 +249,7 @@ docker run \
 
 ---
 
-## 6. Entering the Container
+## 7. Entering the Container
 
 ```bash
 docker exec -it bdm bash
@@ -233,7 +266,7 @@ immediately use `bdm` commands.
 
 ---
 
-## 7. Verifying BioDynaMo Works
+## 8. Verifying BioDynaMo Works
 
 Inside the container, run:
 
@@ -265,7 +298,7 @@ This runs 10 checks including creating and running a demo simulation.
 
 ---
 
-## 8. Running a Demo Simulation
+## 9. Running a Demo Simulation
 
 Inside the container:
 
@@ -291,7 +324,7 @@ Expected output: the simulation prints progress and creates output files in the
 
 ---
 
-## 9. Visualization and ParaView
+## 10. Visualization and ParaView
 
 BioDynaMo uses ParaView for visualization. There are two modes:
 
@@ -351,7 +384,7 @@ The image includes all necessary libraries:
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### "Cannot connect to the Docker daemon"
 
@@ -421,7 +454,7 @@ can reduce parallelism by editing the Dockerfile's `cmake --build` line:
 
 ---
 
-## 11. Cleanup
+## 12. Cleanup
 
 ### Stop and remove the container
 
@@ -453,11 +486,15 @@ Or use the helper script:
 
 ---
 
-## 12. Reference: All Commands at a Glance
+## 13. Reference: All Commands at a Glance
 
 ```bash
 # Build the image
 ./docker/scripts/build_image.sh
+
+# Pull prebuilt image and run it
+./docker/scripts/pull_image.sh --image ghcr.io/sportokalidis/biodynamo --tag latest
+./docker/scripts/run_container.sh --image ghcr.io/sportokalidis/biodynamo:latest
 
 # Start a container (headless)
 ./docker/scripts/run_container.sh
@@ -469,7 +506,7 @@ xhost +local:docker
 # Enter the container
 docker exec -it bdm bash
 
-# Run smoke tests
+# Run tests
 ./docker/scripts/test_biodynamo.sh
 
 # Stop & remove
