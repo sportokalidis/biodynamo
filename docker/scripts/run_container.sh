@@ -3,22 +3,52 @@
 # Create and start a BioDynaMo Docker container
 # =============================================================================
 # Usage:
-#   ./docker/scripts/run_container.sh [--gui]
+#   ./docker/scripts/run_container.sh [--gui] [--image IMAGE]
 #
 # Options:
 #   --gui   Enable X11 forwarding for interactive ParaView GUI.
 #           Requires running `xhost +local:docker` on the host first.
+#   --image Container image to run (e.g. ghcr.io/org/biodynamo:latest)
 #
 # Without --gui the container runs in headless mode using Xvfb (default).
 # =============================================================================
 set -euo pipefail
 
 CONTAINER_NAME="bdm"
-IMAGE_NAME="biodynamo:latest"
+IMAGE_NAME="${BDM_IMAGE:-biodynamo:latest}"
 GUI_MODE=false
 
-if [[ "${1:-}" == "--gui" ]]; then
-    GUI_MODE=true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --gui)
+            GUI_MODE=true
+            shift
+            ;;
+        --image)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --image requires a value"
+                exit 1
+            fi
+            IMAGE_NAME="$2"
+            shift 2
+            ;;
+        *)
+            echo "Error: Unknown option '$1'"
+            echo "Usage: ./docker/scripts/run_container.sh [--gui] [--image IMAGE]"
+            exit 1
+            ;;
+    esac
+done
+
+if ! docker image inspect "${IMAGE_NAME}" > /dev/null 2>&1; then
+    echo "Error: Docker image '${IMAGE_NAME}' was not found locally."
+    echo ""
+    echo "Either build it:"
+    echo "  ./docker/scripts/build_image.sh"
+    echo ""
+    echo "Or pull a prebuilt image:"
+    echo "  ./docker/scripts/pull_image.sh --image ${IMAGE_NAME%:*} --tag ${IMAGE_NAME##*:}"
+    exit 1
 fi
 
 # Stop & remove any previous container with the same name
