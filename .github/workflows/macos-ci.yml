@@ -69,7 +69,7 @@ jobs:
     - name: Build BioDynaMo
       shell: bash
       run: |
-        # export PV_USE_OFFSCREEN=1
+        # export PV_USE_OFFSCREEN=1 
         # export QT_QPA_PLATFORM=offscreen
         # export DISPLAY=:0
         cmake -G Ninja \
