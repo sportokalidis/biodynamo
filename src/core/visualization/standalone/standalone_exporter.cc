@@ -362,23 +362,19 @@ void StandaloneExporter::WriteDiffusionStep() {
 ///
 /// Each diffusion substance in [[visualize_diffusion]] is written as a
 /// parallel ImageData dataset.  The grid is encoded with three scalars:
-/// Origin at the first box centre, Spacing = box length, and WholeExtent
-/// covering all N box centres per dimension.  No explicit geometry arrays
+/// Origin at the grid corner, Spacing = box length, and WholeExtent
+/// 0..N in each dimension (N+1 nodes, N cells).  No explicit geometry arrays
 /// (Points or Cells) are written.
 ///
-/// Data is stored as PointData — one value per VTK "node", which corresponds
-/// to one BioDynaMo box centre.  This allows vtkSmartVolumeMapper to render
-/// concentration fields directly without an intermediate CellDataToPointData
-/// filter.
+/// Data is stored as CellData — one value per diffusion box, matching
+/// BioDynaMo's cell-centred finite-difference storage.
 ///
 /// Z-slab parallelism: the grid is partitioned horizontally; each OpenMP
 /// thread writes one .vti piece file independently.
 ///
-/// Piece extent convention: non-last pieces include one shared-boundary node
-/// (k_end = k_begin + k_len, the same index the next piece starts at) so
-/// that adjacent extents overlap by one node and vtkXMLPImageDataReader
-/// assembles the dataset without gaps.  The extra layer is zero-copy: the
-/// pointer simply reads one more row from the grid's own storage.
+/// Piece extent convention: pieces cover non-overlapping cell ranges.
+/// Piece p covers cells k_begin .. k_begin+k_len-1, expressed in node
+/// indices as extent k_begin .. k_begin+k_len.
 void StandaloneExporter::WriteDiffusionStepVti() {
   auto* sim   = Simulation::GetActive();
   auto* rm    = sim->GetResourceManager();
@@ -397,11 +393,10 @@ void StandaloneExporter::WriteDiffusionStepVti() {
     const size_t ny = static_cast<size_t>(num_boxes[1]);
     const size_t nz = static_cast<size_t>(num_boxes[2]);
 
-    // Origin = centre of the first diffusion box so that VTK "nodes" sit
-    // exactly at BioDynaMo's box centres.
-    const double ox = dims[0] + 0.5 * box;
-    const double oy = dims[2] + 0.5 * box;
-    const double oz = dims[4] + 0.5 * box;
+    // Origin at the grid corner (first node of the lattice).
+    const double ox = dims[0];
+    const double oy = dims[2];
+    const double oz = dims[4];
 
     // Zero-copy pointers into the grid's own concentration/gradient arrays.
     // The DiffusionGrid object outlives all write calls in this loop.
@@ -423,21 +418,11 @@ void StandaloneExporter::WriteDiffusionStepVti() {
       if (k_begin >= nz) continue;
       uint64_t k_len = std::min<uint64_t>(boxes_per_piece, nz - k_begin);
 
-      // k_end is the inclusive last Z-point index written by this piece.
-      // Non-last pieces share one boundary node with the adjacent piece;
-      // the last piece ends at nz-1 and writes no extra node.
-      uint64_t k_end;
-      uint64_t layers;
-      if (k_begin + k_len < nz) {
-        k_end  = k_begin + k_len;
-        layers = k_len + 1;
-      } else {
-        k_end  = nz - 1;
-        layers = k_len;
-      }
-
+      // CellData pieces are non-overlapping: node extent k_begin .. k_begin+k_len
+      // represents exactly k_len cells.  No shared-boundary convention needed.
+      const uint64_t k_end      = k_begin + k_len;
       const uint64_t piece_cells = static_cast<uint64_t>(nx) *
-                                   static_cast<uint64_t>(ny) * layers;
+                                   static_cast<uint64_t>(ny) * k_len;
 
       std::ostringstream vti_name;
       vti_name << output_dir_ << "/diffusion_" << vd.name << "_"
@@ -447,14 +432,15 @@ void StandaloneExporter::WriteDiffusionStepVti() {
       vti << "<?xml version=\"1.0\"?>\n";
       vti << "<VTKFile type=\"ImageData\" version=\"0.1\""
              " byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
+      // WholeExtent 0..N means N+1 nodes → N cells per dimension.
       vti << "  <ImageData"
-          << " WholeExtent=\"0 " << nx-1 << " 0 " << ny-1
-          << " 0 " << nz-1 << "\""
+          << " WholeExtent=\"0 " << nx << " 0 " << ny
+          << " 0 " << nz << "\""
           << " Origin=\""  << ox << " " << oy << " " << oz << "\""
           << " Spacing=\"" << box << " " << box << " " << box << "\">\n";
-      vti << "    <Piece Extent=\"0 " << nx-1 << " 0 " << ny-1
+      vti << "    <Piece Extent=\"0 " << nx << " 0 " << ny
           << " " << k_begin << " " << k_end << "\">\n";
-      vti << "      <PointData>\n";
+      vti << "      <CellData>\n";
 
       struct ArrayMeta { std::string tag; uint32_t nbytes; const char* data; };
       std::vector<ArrayMeta> metas;
@@ -472,10 +458,7 @@ void StandaloneExporter::WriteDiffusionStepVti() {
         offset_bytes += 4 + bytes;
       };
 
-      // Grid layout is Z-outer, Y-middle, X-inner, so the slab starting at
-      // k_begin is contiguous in memory: conc[k_begin*nx*ny ... ].
-      // For non-last pieces, layers = k_len+1, reading one extra row from
-      // the next slab (zero-copy, the array is always fully allocated).
+      // Grid layout is Z-outer, Y-middle, X-inner; the slab is contiguous.
       const uint64_t data_start = k_begin * static_cast<uint64_t>(nx * ny);
       if (vd.concentration)
         append_array(rt, "Substance Concentration", 1,
@@ -486,7 +469,7 @@ void StandaloneExporter::WriteDiffusionStepVti() {
                      &grad[data_start * 3], piece_cells, sizeof(real_t));
 
       for (auto& m : metas) vti << m.tag;
-      vti << "      </PointData>\n";
+      vti << "      </CellData>\n";
       vti << "    </Piece>\n";
       vti << "  </ImageData>\n";
 
@@ -514,9 +497,8 @@ void StandaloneExporter::WriteDiffusionStepVti() {
 /// level so that ParaView can reconstruct the full grid without loading
 /// individual piece files first.
 ///
-/// Each <Piece> entry lists its Z-slab Extent and the path to the
-/// corresponding .vti file.  Non-last pieces share a boundary node with
-/// the adjacent piece (same convention as the piece files).
+/// Each <Piece> entry lists its non-overlapping Z-slab cell range, expressed
+/// as node-index extent k_begin .. k_begin+k_len.
 void StandaloneExporter::WriteDiffusionPvti(
     const std::string& name, bool has_concentration, bool has_gradient,
     std::size_t nx, std::size_t ny, std::size_t nz,
@@ -532,26 +514,26 @@ void StandaloneExporter::WriteDiffusionPvti(
   pvti << "<VTKFile type=\"PImageData\" version=\"0.1\""
           " byte_order=\"LittleEndian\">\n";
   pvti << "  <PImageData"
-       << " WholeExtent=\"0 " << nx-1 << " 0 " << ny-1
-       << " 0 " << nz-1 << "\""
+       << " WholeExtent=\"0 " << nx << " 0 " << ny
+       << " 0 " << nz << "\""
        << " GhostLevel=\"0\""
        << " Origin=\""  << ox << " " << oy << " " << oz << "\""
        << " Spacing=\"" << spacing << " " << spacing << " " << spacing << "\">\n";
 
-  pvti << "    <PPointData>\n";
+  pvti << "    <PCellData>\n";
   if (has_concentration)
     pvti << "      <PDataArray type=\"" << rt
          << "\" Name=\"Substance Concentration\" NumberOfComponents=\"1\"/>\n";
   if (has_gradient)
     pvti << "      <PDataArray type=\"" << rt
          << "\" Name=\"Diffusion Gradient\" NumberOfComponents=\"3\"/>\n";
-  pvti << "    </PPointData>\n";
+  pvti << "    </PCellData>\n";
 
   for (int i = 0; i < pieces; ++i) {
     size_t k0 = static_cast<size_t>(i) * boxes_per_piece;
-    size_t k1 = std::min(k0 + boxes_per_piece, nz - 1);  // inclusive, shared or last
+    size_t k1 = std::min(k0 + boxes_per_piece, nz);  // non-overlapping cell ranges
     pvti << "    <Piece"
-         << " Extent=\"0 " << nx-1 << " 0 " << ny-1
+         << " Extent=\"0 " << nx << " 0 " << ny
          << " " << k0 << " " << k1 << "\""
          << " Source=\"diffusion_" << name << "_" << step_ << "_p" << i
          << ".vti\"/>\n";
