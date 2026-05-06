@@ -13,7 +13,8 @@
 // -----------------------------------------------------------------------------
 //
 // StandaloneAdaptor: a VisualizationAdaptor that writes VTK XML files
-// (VTU/PVTU) using only the C++ standard library and ROOT reflection.
+// (VTU/PVTU for agents, VTI/PVTI for diffusion) using only the C++ standard
+// library and ROOT reflection.
 //
 // It is the dependency-free counterpart of ParaviewAdaptor: no VTK, no Qt,
 // no ParaView installation is required.  The class is compiled into a
@@ -31,7 +32,7 @@
 //                 instance.  ROOT owns the pointer.
 //   Visualize() — called every exported time step by VisualizationOp.
 //                 On the first call, it lazily creates the output directory
-//                 and the StandaloneVtuExporter.  On every call it delegates
+//                 and the StandaloneExporter.  On every call it delegates
 //                 the actual I/O to the exporter.
 //   ~StandaloneAdaptor() — deletes the exporter (closes file handles).
 //
@@ -47,7 +48,7 @@ namespace bdm {
 
 // Forward declaration — keeps the exporter header out of translation units
 // that only need to know the adaptor exists (e.g. visualization_adaptor.cc).
-class StandaloneVtuExporter;
+class StandaloneExporter;
 
 // -----------------------------------------------------------------------------
 /// Visualization adaptor that exports simulation state to VTK XML files
@@ -68,7 +69,7 @@ class StandaloneAdaptor : public VisualizationAdaptor {
   ~StandaloneAdaptor() override;
 
   /// Called every exported time step by VisualizationOp.
-  /// Writes agent VTU files and diffusion VTU files if export is enabled
+  /// Writes agent VTU files and diffusion VTI files if export is enabled
   /// and the current step is a multiple of visualization_interval.
   void Visualize() override;
 
@@ -79,7 +80,7 @@ class StandaloneAdaptor : public VisualizationAdaptor {
 
   /// Owns the writer object that performs the actual VTK XML I/O.
   /// Allocated lazily in Visualize(); deleted in the destructor.
-  StandaloneVtuExporter* exporter_ = nullptr;
+  StandaloneExporter* exporter_ = nullptr;
 
   // ROOT dictionary macro — generates RTTI metadata so that TPluginManager
   // can resolve and call Factory() by name at runtime.

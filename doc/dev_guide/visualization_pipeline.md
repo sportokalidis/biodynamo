@@ -55,13 +55,13 @@ User simulation code
     ParaviewAdaptor            StandaloneAdaptor
      ::Visualize()              ::Visualize()
            │                          │
-    VTK in-memory              StandaloneVtuExporter
+    VTK in-memory              StandaloneExporter
     pipeline + writers          ::WriteStep()
     (vtkUnstructuredGrid,       ::WriteDiffusionStep()
      vtkImageData, etc.)              │
-           │                    writes .vtu/.pvtu
-    writes .vtu/.pvtu             directly via
-    via vtkXMLWriter*             std::fstream
+           │                    writes agents: .vtu/.pvtu
+    writes .vtu/.pvtu             diffusion: .vti/.pvti
+    via vtkXMLWriter*             directly via std::fstream
     (Catalyst pipeline)        (no VTK dependency)
 ```
 
@@ -339,7 +339,7 @@ ParaviewAdaptor::Visualize()
 
 ```
 src/core/visualization/standalone/adaptor.cc
-src/core/visualization/standalone/standalone_vtu_exporter.cc
+src/core/visualization/standalone/standalone_exporter.cc
 ```
 
 ### 7.1 StandaloneAdaptor::Visualize()
@@ -349,7 +349,7 @@ StandaloneAdaptor::Visualize()
   │
   ├── [first call only] lazy init:
   │       std::filesystem::create_directories(output_dir + "/viz")
-  │       exporter_ = new StandaloneVtuExporter(output_dir + "/viz")
+  │       exporter_ = new StandaloneExporter(output_dir + "/viz")
   │
   ├── [gate] !param->export_visualization  → return
   ├── [gate] total_steps % visualization_interval != 0  → return
@@ -361,7 +361,7 @@ StandaloneAdaptor::Visualize()
               └── [see §7.3]
 ```
 
-### 7.2 StandaloneVtuExporter::WriteStep()
+### 7.2 StandaloneExporter::WriteStep()
 
 ```
 WriteStep()
@@ -372,13 +372,11 @@ WriteStep()
   │           ... });
   │       // All agents collected into flat vectors on a single pass.
   │
-  ├── Phase 2: Extract typed fields (diameter, mass, volume, traction)
-  │       for each agent:
-  │           dynamic_cast<Cell*>(agent)  → read mass/volume/traction
-  │           otherwise → fill zeros
+  ├── Phase 2: Extract Diameter into flat array (main thread, no races)
   │
   ├── Phase 3: ROOT reflection for extra user-defined fields
-  │       for each name in extra_member_names_:
+  │       extra_members_ was loaded from bdm.toml once in the constructor
+  │       for each name in extra_members_:
   │           TClass* cls = TClass::GetClass(typeid(*agent))
   │           // Resolves the actual derived type at runtime (not Agent*).
   │           TDataMember* dm = cls->GetDataMember(name)
@@ -394,14 +392,11 @@ WriteStep()
   │           5a. open  agents_{step}_p{p}.vtu
   │           5b. write VTK XML header (<?xml …>  <VTKFile …>)
   │           5c. write metadata table:
-  │               append_array("Points",         offset) → <DataArray …/>
-  │               append_array("Cell_ID",        offset)
+  │               append_array("Cell_ID",        offset) → <DataArray …/>
   │               append_array("Diameter",       offset)
-  │               append_array("Mass",           offset)
-  │               append_array("Volume",         offset)
-  │               append_array("TractionForce",  offset)
-  │               for each extra member:
+  │               for each name in extra_members_:
   │                   append_array(name, offset)
+  │               append_array("Points",         offset)
   │           5d. write <PointData> declarations (all arrays listed)
   │           5e. write <Points> declaration
   │           5f. write VTK_VERTEX topology (connectivity + offsets + types)
@@ -415,54 +410,77 @@ WriteStep()
               step_++
 ```
 
-### 7.3 StandaloneVtuExporter::WriteDiffusionStep()
+### 7.3 StandaloneExporter::WriteDiffusionStep()
+
+`WriteDiffusionStep()` is a thin dispatcher — it calls `WriteDiffusionStepVti()` (the default) and then increments `step_`.  A complete `WriteDiffusionStepVtu()` implementation also exists and can be activated by replacing the call inside `WriteDiffusionStep()`.
+
+#### Default path: `WriteDiffusionStepVti()` (VTK ImageData)
 
 ```
-WriteDiffusionStep()
+WriteDiffusionStepVti()
   │
   ├── for each substance in param->visualize_diffusion:
   │       DiffusionGrid* grid = rm->GetDiffusionGrid(name)
-  │       dims = grid->GetNumBoxesArray()   // {nx, ny, nz}
-  │       spacing = grid->GetBoxLength()
-  │       origin = grid->GetMinCorner()
-  │       conc_ptr = grid->GetAllConcentrations()   // direct pointer, no copy
-  │       grad_ptr = grid->GetAllGradients()
+  │       nx, ny, nz = grid->GetNumBoxesArray()
+  │       box        = grid->GetBoxLength()
+  │       dims       = grid->GetDimensions()   // {xmin,xmax,ymin,ymax,zmin,zmax}
+  │       conc_ptr   = grid->GetAllConcentrations()  // zero-copy pointer
+  │       grad_ptr   = grid->GetAllGradients()       // zero-copy pointer
   │
-  │       Partition: slab_z = ceil(nz / num_threads)
+  │       origin = (dims[0]+0.5*box, dims[2]+0.5*box, dims[4]+0.5*box)
+  │       // Origin at first box centre so VTK "nodes" = BioDynaMo box centres
+  │
+  │       Partition: boxes_per_piece = ceil(nz / num_threads)
   │
   │       #pragma omp parallel for
-  │       for p in [0, num_threads):
-  │           z0 = p * slab_z,   z1 = min((p+1)*slab_z, nz)
-  │           nz_slab = z1 - z0
+  │       for p in [0, num_pieces):
+  │           k_begin = p * boxes_per_piece
+  │           k_len   = min(boxes_per_piece, nz - k_begin)
   │
-  │           open  diffusion_{name}_{step}_p{p}.vtu
-  │           write XML header
-  │           write metadata table:
-  │               append_array("Points",        offset)
-  │               [if concentration] append_array("concentration", offset)
-  │               [if gradient]      append_array("gradient",      offset)
-  │           write <CellData> declarations
-  │           write <Points> declaration
-  │           write VTK_VOXEL topology:
-  │               for z in [z0, z1), y in [0, ny), x in [0, nx):
-  │                   n0 = local_node(x,   y,   z-z0  )
-  │                   n1 = local_node(x+1, y,   z-z0  )
-  │                   n2 = local_node(x,   y+1, z-z0  )
-  │                   n3 = local_node(x+1, y+1, z-z0  )
-  │                   n4 = local_node(x,   y,   z-z0+1)
-  │                   n5 = local_node(x+1, y,   z-z0+1)
-  │                   n6 = local_node(x,   y+1, z-z0+1)
-  │                   n7 = local_node(x+1, y+1, z-z0+1)
-  │           write corner Points:
-  │               for z in [z0, z1+1), y in [0, ny+1), x in [0, nx+1):
-  │                   point = (origin.x + x*spacing,
-  │                             origin.y + y*spacing,
-  │                             origin.z + z*spacing)
-  │           write binary AppendedData
+  │           // Non-last pieces: k_end = k_begin + k_len (shared boundary node)
+  │           // Last piece:      k_end = nz - 1
+  │           // layers = k_len+1 (non-last) or k_len (last)
+  │
+  │           open  diffusion_{name}_{step}_p{p}.vti
+  │           write XML header (ImageData, WholeExtent="0 nx-1 0 ny-1 0 nz-1")
+  │           write Piece Extent="0 nx-1 0 ny-1 k_begin k_end"
+  │           write <PointData> declarations (concentration, gradient)
+  │           write binary AppendedData (zero-copy from grid arrays)
   │           close file
   │
-  └── WriteDiffusionPvtu(name, has_conc, has_grad, num_pieces)
-      step_++
+  └── WriteDiffusionPvti(name, has_conc, has_grad, nx, ny, nz,
+                         ox, oy, oz, box, num_pieces, boxes_per_piece)
+```
+
+#### Alternative path: `WriteDiffusionStepVtu()` (VTK_VOXEL UnstructuredGrid)
+
+```
+WriteDiffusionStepVtu()
+  │
+  ├── for each substance in param->visualize_diffusion:
+  │       [same grid setup as VTI path]
+  │
+  │       #pragma omp parallel for
+  │       for p in [0, num_pieces):
+  │           k_begin, k_len [same partitioning]
+  │           num_nodes = (nx+1)*(ny+1)*(k_len+1)
+  │           num_cells = nx*ny*k_len
+  │
+  │           build corner-node coords:
+  │               for kl in [0, k_len], j in [0, ny], i in [0, nx]:
+  │                   pt = (dims[0]+i*box, dims[2]+j*box, dims[4]+(k_begin+kl)*box)
+  │
+  │           build VTK_VOXEL connectivity (8 nodes per cell):
+  │               n0=(i,j,k) n1=(i+1,j,k) n2=(i,j+1,k) n3=(i+1,j+1,k)
+  │               n4=(i,j,k+1) n5=(i+1,j,k+1) n6=(i,j+1,k+1) n7=(i+1,j+1,k+1)
+  │
+  │           open  diffusion_{name}_{step}_p{p}.vtu
+  │           write XML header (UnstructuredGrid)
+  │           write <CellData> declarations (concentration, gradient)
+  │           write binary AppendedData (CellData + corner Points + topology)
+  │           close file
+  │
+  └── WriteDiffusionVtuIndex(name, has_conc, has_grad, num_pieces)
 ```
 
 ---
@@ -477,22 +495,20 @@ WriteDiffusionStep()
 | **Diffusion data structure** | `vtkImageData` (in-memory VTK object) | Pointer directly into `DiffusionGrid` memory |
 | **File writing** | `vtkXMLUnstructuredGridWriter`, `vtkXMLImageDataWriter` | `std::fstream` + manual VTK XML serialization |
 | **Agent file format** | VTU (Unstructured Grid) | VTU (Unstructured Grid) |
-| **Diffusion file format** | VTI (Image Data — uniform structured grid) | VTU with VTK_VOXEL cells (unstructured, but axis-aligned) |
-| **Diffusion layout** | `vtkImageData` PointData — values at node corners | `CellData` — values at voxel centers |
+| **Diffusion file format** | VTI (Image Data — uniform structured grid) | VTI (Image Data) by default; VTU with VTK_VOXEL cells available as alternative |
+| **Diffusion layout** | `PointData` at box centres | `PointData` at box centres (VTI default); `CellData` at voxel centres (VTU alternative) |
 | **Parallelism** | VTK internal parallelism via `ParallelVtuWriter` / `ParallelVtiWriter` | OpenMP parallel for loop |
 | **In-situ support** | Yes (Catalyst pipeline via `vtkCPProcessor`) | No (export-only) |
 | **PVSM generation** | Yes (`generate_pv_state.py` via `pvbatch`) | No |
-| **Volume rendering in ParaView** | Works out of the box (VTI Image Data) | Works when using VTK_VOXEL cells |
+| **Volume rendering in ParaView** | Works out of the box (`vtkSmartVolumeMapper` on VTI PointData) | Works out of the box (`vtkSmartVolumeMapper` on VTI PointData) |
 
-### Why does diffusion use a different format?
+### Why does diffusion use VTI for both paths?
 
-The ParaView adaptor writes diffusion as **VTI** (Image Data), a format designed specifically for regular structured grids.  VTI is the most compact and efficient format for this case: it only stores spacing and origin, not explicit coordinates for every point.
+VTI (Image Data) is the most compact and efficient format for a uniform structured grid: the geometry is fully described by `Origin`, `Spacing`, and `Extent` — no explicit coordinate arrays are stored.  VTK's rendering pipeline and `vtkSmartVolumeMapper` have a dedicated fast path for ImageData with `PointData`.
 
-The Standalone adaptor writes diffusion as **VTU with VTK_VOXEL cells**.  This is a deliberate design choice:
+Both adaptors set `Origin` at the first box centre and `Spacing` equal to the box length, so each VTK "node" coincides with a BioDynaMo box centre.  The difference is that the ParaView adaptor uses `vtkImageData` objects and VTK's own writer, while the standalone adaptor serializes the same XML format by hand with only `std::fstream`.
 
-1. **No extra writer needed.** The existing binary-append VTU writer is reused, avoiding a second serializer.
-2. **Explicit geometry.** Storing corner nodes explicitly allows per-piece coordinate offsets (Z-slab origin), which simplifies parallel assembly without needing the PVTI `WholeExtent` / `PieceExtent` bookkeeping that VTI requires.
-3. **Volume rendering.** ParaView's volume renderer requires 3D voxel cells.  `VTK_VOXEL` (type 11) is a valid 3D cell, so volume rendering works identically to the VTI path.  `VTK_VERTEX` (type 1, a 0D point) would break volume rendering with the error `Encountered non-tetrahedra cell!`.
+The standalone adaptor also keeps a `WriteDiffusionStepVtu()` implementation (VTK_VOXEL cells, `CellData`) as an alternative.  It is physically correct — `CellData` with one value per voxel centre matches BioDynaMo's cell-centred finite-difference scheme — but requires `vtkUnstructuredGridVolumeMapper` instead of `vtkSmartVolumeMapper` for volume rendering.
 
 ---
 
@@ -593,17 +609,15 @@ A complete minimal VTU file written by the Standalone adaptor looks like this (w
     <Piece NumberOfPoints="3" NumberOfCells="3">
 
       <!-- PointData: per-agent scalar/vector attributes -->
+      <!-- Cell_ID and Diameter are always written.             -->
+      <!-- Additional fields come from additional_data_members  -->
+      <!-- in bdm.toml (e.g. "my_field_", "cell_type_").       -->
       <PointData>
-        <DataArray Name="Cell_ID"      type="Int64"   NumberOfComponents="1"
-                   format="appended"   offset="0"/>
-        <DataArray Name="Diameter"     type="Float32" NumberOfComponents="1"
-                   format="appended"   offset="28"/>
-        <DataArray Name="Mass"         type="Float32" NumberOfComponents="1"
-                   format="appended"   offset="44"/>
-        <DataArray Name="Volume"       type="Float32" NumberOfComponents="1"
-                   format="appended"   offset="60"/>
-        <DataArray Name="TractionForce" type="Float32" NumberOfComponents="3"
-                   format="appended"   offset="76"/>
+        <DataArray Name="Cell_ID"  type="UInt64"  NumberOfComponents="1"
+                   format="appended" offset="0"/>
+        <DataArray Name="Diameter" type="Float64" NumberOfComponents="1"
+                   format="appended" offset="20"/>
+        <!-- extra_members_ fields follow here -->
       </PointData>
 
       <!-- Points: XYZ coordinates, one per agent -->
@@ -660,11 +674,9 @@ A `.pvtu` file is a lightweight XML index that lists all piece files and mirrors
     <!-- Schema mirror: same arrays as the individual .vtu pieces -->
     <!-- ParaView needs this to know what fields exist without loading pieces -->
     <PPointData>
-      <PDataArray Name="Cell_ID"      type="Int64"   NumberOfComponents="1"/>
-      <PDataArray Name="Diameter"     type="Float32" NumberOfComponents="1"/>
-      <PDataArray Name="Mass"         type="Float32" NumberOfComponents="1"/>
-      <PDataArray Name="Volume"       type="Float32" NumberOfComponents="1"/>
-      <PDataArray Name="TractionForce" type="Float32" NumberOfComponents="3"/>
+      <PDataArray Name="Cell_ID"  type="UInt64"  NumberOfComponents="1"/>
+      <PDataArray Name="Diameter" type="Float64" NumberOfComponents="1"/>
+      <!-- extra_members_ fields mirrored here -->
     </PPointData>
     <PPoints>
       <PDataArray type="Float32" NumberOfComponents="3"/>
@@ -688,32 +700,40 @@ The `PDataArray` elements in `<PPointData>` carry the same `Name`, `type`, and `
 
 ---
 
-## 13. VTI vs VTU for diffusion
+## 13. VTI for diffusion
 
-### 13.1 VTI (Image Data) — ParaView path
+Both the ParaView adaptor and the standalone adaptor write diffusion as **VTI** (VTK ImageData).  The standalone adaptor also keeps a VTU/VTK_VOXEL implementation as an available alternative.
+
+### 13.1 VTI — default format for both paths
 
 ```xml
 <VTKFile type="ImageData" …>
-  <ImageData WholeExtent="0 63 0 63 0 63"
-             Origin="0 0 0"
-             Spacing="1.0 1.0 1.0">
-    <Piece Extent="0 63 0 63 0 15">   ← this piece covers Z slabs 0–15
+  <ImageData WholeExtent="0 39 0 39 0 39"
+             Origin="10 10 10"
+             Spacing="20.0 20.0 20.0">
+    <!-- Origin at first box centre; Spacing = box length.
+         WholeExtent covers N box centres per dimension (not N+1 nodes). -->
+    <Piece Extent="0 39 0 39 0 5">   ← this piece covers Z slabs 0–5
       <PointData>
-        <DataArray Name="Substance_0-Gradient"      … format="appended" offset="0"/>
-        <DataArray Name="Substance_0-Concentration" … format="appended" offset="…"/>
+        <DataArray Name="Substance Concentration" … format="appended" offset="0"/>
+        <DataArray Name="Diffusion Gradient"      … format="appended" offset="…"/>
       </PointData>
-      <!-- No <Points> or <Cells> — fully determined by Spacing/Origin/Extent -->
+      <!-- No <Points> or <Cells> — fully determined by Origin/Spacing/Extent -->
     </Piece>
   </ImageData>
   <AppendedData encoding="raw">…</AppendedData>
 </VTKFile>
 ```
 
-The `WholeExtent` and `Piece Extent` use *node* indices (not box indices).  A grid with `N` boxes in a dimension has `N+1` nodes in that dimension.
+Key parameters:
+- `Origin` is placed at the **first box centre** (`dims[i] + 0.5 * box`), not at the grid corner.
+- `WholeExtent` uses N indices per dimension (one per box centre), not N+1.
+- `PointData` holds one value per VTK "node" — each node corresponds to a BioDynaMo box centre.
+- Adjacent pieces share one boundary node (`vtkXMLPImageDataReader` requires this for gap-free assembly).
 
-VTI `PointData` stores values at node corners, whereas BioDynaMo's diffusion stores concentrations at box centers.  The ParaView adaptor aligns grid origin and spacing so that the box-center values appear at the correct spatial positions despite being stored as PointData.
+This layout satisfies two requirements simultaneously: `vtkSmartVolumeMapper` finds the data in `PointData`, and the shared-boundary convention prevents gaps between pieces.
 
-### 13.2 VTU with VTK_VOXEL — Standalone path
+### 13.2 VTU with VTK_VOXEL — standalone alternative
 
 ```xml
 <VTKFile type="UnstructuredGrid" …>
@@ -721,11 +741,11 @@ VTI `PointData` stores values at node corners, whereas BioDynaMo's diffusion sto
     <Piece NumberOfPoints="(nx+1)*(ny+1)*(nz_slab+1)"
            NumberOfCells="nx*ny*nz_slab">
       <CellData>
-        <DataArray Name="concentration" type="Float32" NumberOfComponents="1"
+        <DataArray Name="Substance Concentration" type="Float64" NumberOfComponents="1"
                    format="appended" offset="0"/>
       </CellData>
       <Points>
-        <DataArray type="Float32" NumberOfComponents="3"
+        <DataArray type="Float64" NumberOfComponents="3"
                    format="appended" offset="…"/>
       </Points>
       <Cells>
@@ -739,7 +759,7 @@ VTI `PointData` stores values at node corners, whereas BioDynaMo's diffusion sto
 </VTKFile>
 ```
 
-`CellData` is used here (not `PointData`) because concentration is physically defined at the center of each diffusion box.  In VTU, `CellData` has one value per cell (voxel), which matches the BioDynaMo data model exactly.
+`CellData` has one value per voxel centre — physically correct for BioDynaMo's cell-centred finite-difference scheme.  To activate, replace `WriteDiffusionStepVti()` with `WriteDiffusionStepVtu()` inside `WriteDiffusionStep()`.
 
 ### 13.3 VTK_VOXEL node ordering
 
@@ -769,12 +789,12 @@ This differs from `VTK_HEXAHEDRON` (type 12), which uses counterclockwise face w
 | Type code | Name | Dimensions | Used for |
 |-----------|------|-----------|---------|
 | `1` | `VTK_VERTEX` | 0D (point) | Agent positions (both paths) |
-| `11` | `VTK_VOXEL` | 3D (axis-aligned hexahedron) | Diffusion voxels (Standalone path) |
-| *(implicit)* | Image Data grid | 3D | Diffusion voxels (ParaView path — no explicit cell type needed for VTI) |
+| `11` | `VTK_VOXEL` | 3D (axis-aligned hexahedron) | Diffusion voxels (Standalone VTU alternative) |
+| *(implicit)* | Image Data grid | 3D | Diffusion voxels (both paths default — VTI, no explicit cell type) |
 
 `VTK_VERTEX` (type 1) represents agents as single geometric points.  It is the correct choice because an agent is a sphere: its center position is the only geometric data needed.  Radius/diameter are stored as point attributes, not as geometry, so that ParaView's `Glyph` filter can scale spherical glyphs by the diameter attribute.
 
-`VTK_VOXEL` (type 11) is used for diffusion cells because it is the axis-aligned 3D cell type that ParaView's **Volume** rendering mapper supports.  If `VTK_VERTEX` were used for diffusion, the volume mapper would error with `Encountered non-tetrahedra cell!` because a 0D point is not a volumetric cell.
+`VTK_VOXEL` (type 11) is available in the standalone adaptor as an alternative diffusion output.  It is the axis-aligned 3D cell type that `vtkUnstructuredGridVolumeMapper` supports.  The default VTI path avoids this cell type entirely — `vtkSmartVolumeMapper` works directly on ImageData PointData.
 
 ---
 

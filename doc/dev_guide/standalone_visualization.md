@@ -15,9 +15,9 @@
 5. [File-by-File Walkthrough: `visualization/standalone/`](#5-file-by-file-walkthrough-standalone)
    - [adaptor.h](#51-adaptorh)
    - [adaptor.cc](#52-adaptorcc)
-   - [standalone_vtu_exporter.h](#53-standalone_vtu_exporterh)
-   - [standalone_vtu_exporter.cc — WriteStep (agents)](#54-standalone_vtu_exportercc--writestep)
-   - [standalone_vtu_exporter.cc — WriteDiffusionStep (diffusion grids)](#55-standalone_vtu_exportercc--writediffusionstep)
+   - [standalone_exporter.h](#53-standalone_exporterh)
+   - [standalone_exporter.cc — WriteStep (agents)](#54-standalone_exportercc--writestep)
+   - [standalone_exporter.cc — WriteDiffusionStep (diffusion grids)](#55-standalone_exportercc--writediffusionstep)
 6. [Comparison: Standalone vs ParaView Adaptor](#6-comparison-standalone-vs-paraview-adaptor)
 7. [VTK File Formats Explained](#7-vtk-file-formats-explained)
 8. [Output File Structure](#8-output-file-structure)
@@ -63,7 +63,7 @@ Simulation::GetScheduler()->Simulate(N)
           │         uses vtkImageData, vtkUnstructuredGrid, Catalyst…
           │
           └── StandaloneAdaptor::Visualize() [standalone build — THIS BRANCH]
-                    uses StandaloneVtuExporter (plain C++/STL)
+                    uses StandaloneExporter (plain C++/STL)
 ```
 
 The key abstraction is `VisualizationAdaptor` — a pure abstract class with one method: `virtual void Visualize()`. The concrete implementation is a **ROOT plugin** — a shared library that is loaded at runtime via ROOT's `TPluginManager`. This is why you can switch between ParaView and standalone just by changing a single line in `bdm.toml` without recompiling your simulation.
@@ -292,8 +292,8 @@ VisualizationAdaptor* VisualizationAdaptor::Create(const std::string& adaptor) {
 
 namespace bdm {
 
-class StandaloneVtuExporter;  // forward declaration — avoids pulling in the
-                               // exporter header everywhere adaptor.h is included
+class StandaloneExporter;  // forward declaration — avoids pulling in the
+                            // exporter header everywhere adaptor.h is included
 
 class StandaloneAdaptor : public VisualizationAdaptor {
  public:
@@ -305,8 +305,8 @@ class StandaloneAdaptor : public VisualizationAdaptor {
   void Visualize() override;  // called every exported time step by the scheduler
 
  private:
-  bool initialized_ = false;           // true after the output directory is created
-  StandaloneVtuExporter* exporter_ = nullptr;  // owns the writer object
+  bool initialized_ = false;        // true after the output directory is created
+  StandaloneExporter* exporter_ = nullptr;  // owns the writer object
 
   BDM_CLASS_DEF_NV(StandaloneAdaptor, 1);
   // This ROOT macro generates the RTTI/reflection dictionary entry that allows
@@ -327,7 +327,7 @@ class StandaloneAdaptor : public VisualizationAdaptor {
 #include "core/scheduler.h"     // GetSimulatedSteps()
 #include "core/param/param.h"   // export_visualization, visualization_interval
 #include <filesystem>           // std::filesystem::create_directories
-#include "core/visualization/standalone/standalone_vtu_exporter.h"
+#include "core/visualization/standalone/standalone_exporter.h"
 
 namespace bdm {
 
@@ -358,7 +358,7 @@ void StandaloneAdaptor::Visualize() {
     // create_directories is equivalent to "mkdir -p" — creates the full path
     // even if intermediate directories do not exist yet.
     std::filesystem::create_directories(out_dir);
-    exporter_ = new StandaloneVtuExporter(out_dir);
+    exporter_ = new StandaloneExporter(out_dir);
     initialized_ = true;
   }
 
@@ -379,53 +379,71 @@ void StandaloneAdaptor::Visualize() {
 }  // namespace bdm
 ```
 
-### 5.3 `standalone_vtu_exporter.h`
+### 5.3 `standalone_exporter.h`
 
 ```cpp
-class StandaloneVtuExporter {
+class StandaloneExporter {
  public:
-  // output_dir: the directory where all .vtu and .pvtu files will be written.
-  explicit StandaloneVtuExporter(const std::string& output_dir);
-  ~StandaloneVtuExporter();
+  // output_dir: the directory where all output files will be written.
+  explicit StandaloneExporter(const std::string& output_dir);
+  ~StandaloneExporter();
 
   // Writes one time step of agent data.
   // Produces:  agents_{step}_p{piece}.vtu  (one per thread)
   //            agents_{step}.pvtu          (parallel index file)
   void WriteStep();
 
-  // Writes one time step of diffusion grid data.
-  // For each visualized substance, produces:
-  //   diffusion_{name}_{step}_p{piece}.vtu  (one per Z-slab thread)
-  //   diffusion_{name}_{step}.pvtu          (parallel index file)
+  // Dispatcher: writes diffusion data and increments step_.
+  // Calls WriteDiffusionStepVti() by default (VTK ImageData output).
+  // Replace with WriteDiffusionStepVtu() to switch to VTK_VOXEL output.
   void WriteDiffusionStep();
 
  private:
   std::string output_dir_;
-  int step_ = 0;  // incremented after each WriteStep() call
+  int step_ = 0;  // incremented by WriteDiffusionStep() after both file families are written
 
-  // Helpers that write the parallel index (*.pvtu) files.
+  // Scalar member names read from additional_data_members in bdm.toml.
+  // Loaded once in the constructor; bdm.toml does not change at runtime.
+  std::vector<std::string> extra_members_;
+
+  // Agent parallel index file.
   void WritePvtu(int pieces) const;
-  void WriteDiffusionPvtu(const std::string& name,
-                          bool has_concentration,
-                          bool has_gradient,
-                          int pieces = 1) const;
+
+  // VTK ImageData (VTI) diffusion output — default.
+  void WriteDiffusionStepVti();
+
+  // VTK UnstructuredGrid with VTK_VOXEL cells — available alternative.
+  void WriteDiffusionStepVtu();
+
+  // VTI parallel index file for one diffusion substance.
+  void WriteDiffusionPvti(const std::string& name,
+                          bool has_concentration, bool has_gradient,
+                          std::size_t nx, std::size_t ny, std::size_t nz,
+                          double ox, double oy, double oz,
+                          double spacing, int pieces,
+                          std::size_t boxes_per_piece) const;
+
+  // VTU parallel index file for one diffusion substance.
+  void WriteDiffusionVtuIndex(const std::string& name,
+                              bool has_concentration, bool has_gradient,
+                              int pieces) const;
 };
 ```
 
-### 5.4 `standalone_vtu_exporter.cc` — WriteStep
+### 5.4 `standalone_exporter.cc` — WriteStep
 
 `WriteStep` exports the positions and attributes of every agent (cell) in the simulation.
 
 #### Phase 1: Collect all agent data into flat arrays
 
 ```cpp
-void StandaloneVtuExporter::WriteStep() {
+void StandaloneExporter::WriteStep() {
   auto* sim = Simulation::GetActive();
   auto* rm  = sim->GetResourceManager();
 
   // Flat arrays for the entire agent population.
   // Using flat arrays (not a vector of structs) allows us to later slice
-  // contiguous sub-ranges per piece without copying.
+  // contiguous sub-ranges per piece with a single pointer offset.
   std::vector<Agent*>   agents;
   std::vector<double>   points;   // x0,y0,z0, x1,y1,z1, …  (3 doubles per agent)
   std::vector<uint64_t> ids;
@@ -442,50 +460,27 @@ void StandaloneVtuExporter::WriteStep() {
 
   const size_t n = ids.size();  // total number of agents
 
-  // Pre-extract per-agent scalar fields into flat arrays.
-  // This is done before the parallel loop to avoid data races:
-  // all agent reads happen on the main thread, then each parallel thread
-  // only reads from its own slice of these pre-computed arrays.
-  std::vector<double> diam(n), mass(n), volume(n), traction(n * 3);
-
-  for (size_t i = 0; i < n; ++i) {
-    Agent* agent = agents[i];
-    diam[i] = agent->GetDiameter();
-
-    // dynamic_cast is needed because mass/volume/traction are fields of Cell,
-    // not the base Agent class. Non-Cell agents (e.g. neurite tips) get zeros.
-    if (auto* cell = dynamic_cast<Cell*>(agent)) {
-      mass[i]   = cell->GetMass();
-      volume[i] = cell->GetVolume();
-      const auto& tf = cell->GetTractorForce();
-      traction[i*3+0] = tf[0];
-      traction[i*3+1] = tf[1];
-      traction[i*3+2] = tf[2];
-    } else {
-      mass[i] = volume[i] = traction[i*3] = traction[i*3+1] = traction[i*3+2] = 0.0;
-    }
-  }
+  // Pre-extract Diameter into a flat array before the parallel loop.
+  // All agent reads happen on the main thread; each parallel thread
+  // then only reads from its own read-only slice — no mutexes needed.
+  std::vector<double> diam(n);
+  for (size_t i = 0; i < n; ++i)
+    diam[i] = agents[i]->GetDiameter();
 ```
 
-#### Phase 2: Load extra fields from `bdm.toml`
+#### Phase 2: Read extra fields from `extra_members_`
 
 ```cpp
-  // `additional_data_members` in bdm.toml lets users export any scalar C++
-  // data member of their custom agent type without recompiling BioDynaMo.
-  // Example in bdm.toml:
-  //   [[visualize_agent]]
-  //   name = "MyCell"
-  //   additional_data_members = ["my_custom_field_"]
-  auto extra = LoadAdditionalMembers();  // reads bdm.toml, returns field names
-  std::vector<std::vector<double>> extra_vals(extra.size());
-  for (size_t f = 0; f < extra.size(); ++f) {
+  // extra_members_ was populated once in the constructor from bdm.toml.
+  // No file I/O happens here — we just use the cached field names.
+  // ReadScalarMember uses ROOT's TDataMember::GetOffset() to find each
+  // field's byte offset in the actual derived type at runtime.
+  std::vector<std::vector<double>> extra_vals(extra_members_.size());
+  for (size_t f = 0; f < extra_members_.size(); ++f) {
     extra_vals[f].resize(n);
     for (size_t i = 0; i < n; ++i) {
       double val = 0.0;
-      // ReadScalarMember uses ROOT's TDataMember reflection to find the
-      // byte offset of `extra[f]` inside the agent object and read its value.
-      // This works for double, float, int, uint64_t members.
-      ReadScalarMember(agents[i], extra[f], val);
+      ReadScalarMember(agents[i], extra_members_[f], val);
       extra_vals[f][i] = val;
     }
   }
@@ -553,14 +548,14 @@ void StandaloneVtuExporter::WriteStep() {
     vtu << "<Piece NumberOfPoints=\"" << count
         << "\" NumberOfCells=\""  << count << "\">\n";
 
-    // PointData section: all per-agent attributes
-    append_array("UInt64",  "Cell_ID",      1, &ids[begin],           count, 8);
-    for (size_t f = 0; f < extra.size(); ++f)
-      append_array("Float64", extra[f],     1, &extra_vals[f][begin], count, 8);
-    append_array("Float64", "Diameter",     1, &diam[begin],          count, 8);
-    append_array("Float64", "Mass",         1, &mass[begin],          count, 8);
-    append_array("Float64", "Volume",       1, &volume[begin],        count, 8);
-    append_array("Float64", "TractionForce",3, &traction[begin*3],    count, 8);
+    // PointData section: all per-agent attributes.
+    // Cell_ID and Diameter are always written; extra_members_ supplies any
+    // additional scalar fields the user listed in bdm.toml.
+    append_array("UInt64",  "Cell_ID",  1, &ids[begin],  count, 8);
+    append_array("Float64", "Diameter", 1, &diam[begin], count, 8);
+    for (size_t f = 0; f < extra_members_.size(); ++f)
+      append_array("Float64", extra_members_[f], 1,
+                   &extra_vals[f][begin], count, 8);
 
     // Points section: XYZ coordinates
     // (sliced from the flat `points` array using the piece's begin index)
@@ -591,7 +586,7 @@ void StandaloneVtuExporter::WriteStep() {
 
 After all pieces are written, the parallel loop ends and a single PVTU index file is written on the main thread.
 
-#### `LoadAdditionalMembers()` helper
+#### `LoadAdditionalMembers()` helper (called once from constructor)
 
 ```cpp
 static std::vector<std::string> LoadAdditionalMembers() {
@@ -599,6 +594,7 @@ static std::vector<std::string> LoadAdditionalMembers() {
   // binary was launched from) and extracts the names listed under
   // `additional_data_members = ["field1_", "field2_"]`.
   // Uses a single regex pass — no TOML library dependency.
+  // The result is stored in extra_members_ and reused every step.
   std::regex re(R"(additional_data_members\s*=\s*\[([^\]]+)\])");
   // ...returns vector of field name strings
 }
@@ -626,9 +622,9 @@ static bool ReadScalarMember(const Agent* agent,
 }
 ```
 
-### 5.5 `standalone_vtu_exporter.cc` — WriteDiffusionStep
+### 5.5 `standalone_exporter.cc` — WriteDiffusionStep
 
-`WriteDiffusionStep` exports the 3D diffusion grids. This is the most algorithmically complex part.
+`WriteDiffusionStep` is a thin dispatcher that calls `WriteDiffusionStepVti()` and then increments `step_`.  Two complete implementations exist: the VTI implementation is the default; the VTU implementation is kept as an alternative and can be activated by swapping the call inside `WriteDiffusionStep()`.
 
 #### Background: What a Diffusion Grid Is
 
@@ -642,7 +638,7 @@ The grid has `nx × ny × nz` boxes and is described by:
 
 #### Parallelisation Strategy: Z-slab Decomposition
 
-The grid is too large to write as a single piece on one thread. Instead, it is sliced into horizontal slabs along the Z axis — one slab per thread. Each thread independently writes its own `.vtu` file.
+The grid is sliced into horizontal slabs along the Z axis — one slab per thread.  Each thread independently writes its own piece file.
 
 ```
 Z axis
@@ -656,133 +652,78 @@ Z axis
   └─►└─────────────────┘  ← slab p=0  (first, k_begin=0)
 ```
 
-```cpp
-uint64_t num_pieces     = min(nz, max_threads); // at most one slab per Z layer
-uint64_t boxes_per_piece = ceil(nz / num_pieces);
+#### `WriteDiffusionStepVti()` — default VTK ImageData output
 
-#pragma omp parallel for schedule(static, 1)
-for (uint64_t p = 0; p < num_pieces; ++p) {
-  uint64_t k_begin = p * boxes_per_piece;       // first Z box index for this piece
-  uint64_t k_len   = min(boxes_per_piece, nz - k_begin); // boxes in this slab
-```
+Produces `.vti` + `.pvti` files.  The grid is encoded with `Origin` at the first box centre, `Spacing` = box length, and `WholeExtent="0 nx-1 0 ny-1 0 nz-1"` (N points, not N+1 nodes).  Data is stored as `PointData`: one VTK "node" per BioDynaMo box centre — no explicit geometry arrays are written.
 
-#### Corner Node Generation (Points Array)
-
-VTK_VOXEL cells require **corner nodes** — the 8 vertices at the corners of each voxel, not the cell centers. For `k_len` layers of boxes, there are `k_len + 1` layers of nodes (one extra layer for the top face of the last box).
-
-```
-Z-nodes for piece:  k_begin    k_begin+1    ...    k_begin+k_len
-(k_len+1 layers)       │           │                    │
-                    ───┼───────────┼────────────────────┼───
-```
+Adjacent pieces share one boundary point (`vtkXMLPImageDataReader` requires this to assemble the dataset without gaps).  Non-last pieces write `k_len + 1` layers of box-centre values, where the extra layer is a zero-copy read from the grid's own storage:
 
 ```cpp
-const size_t nz_nodes_piece = k_len + 1;  // node layers in Z
-const size_t nx_nodes       = nx + 1;     // node count in X
-const size_t ny_nodes       = ny + 1;     // node count in Y
-const uint64_t piece_points = nx_nodes * ny_nodes * nz_nodes_piece;
+// Origin = centre of the first diffusion box so that VTK "nodes" sit
+// exactly at BioDynaMo's box centres.
+const double ox = dims[0] + 0.5 * box;
+const double oy = dims[2] + 0.5 * box;
+const double oz = dims[4] + 0.5 * box;
 
-std::vector<double> points(piece_points * 3);  // pre-allocated, no push_back
-size_t idx = 0;
-for (size_t kk = 0; kk < nz_nodes_piece; ++kk) {
-  // Each node layer is at z = grid_min_z + (k_begin + kk) * box_length.
-  // Note: NO +0.5 offset — these are corner nodes, not box centers.
-  double z = dims[4] + box * static_cast<double>(k_begin + kk);
-  for (size_t j = 0; j < ny_nodes; ++j) {
-    double y = dims[2] + box * static_cast<double>(j);
-    for (size_t i = 0; i < nx_nodes; ++i) {
-      points[idx++] = dims[0] + box * static_cast<double>(i);
-      points[idx++] = y;
-      points[idx++] = z;
-    }
-  }
+// Non-last pieces include one shared-boundary node; the last piece ends at nz-1.
+uint64_t k_end;
+uint64_t layers;
+if (k_begin + k_len < nz) {
+  k_end  = k_begin + k_len;  // shared boundary with next piece
+  layers = k_len + 1;
+} else {
+  k_end  = nz - 1;           // last piece — no extra node
+  layers = k_len;
 }
-```
 
-#### VTK_VOXEL Connectivity
+// WholeExtent uses N points per dimension (N box centres, not N+1 nodes).
+vti << "  <ImageData"
+    << " WholeExtent=\"0 " << nx-1 << " 0 " << ny-1 << " 0 " << nz-1 << "\""
+    << " Origin=\""  << ox << " " << oy << " " << oz << "\""
+    << " Spacing=\"" << box << " " << box << " " << box << "\">\n";
+vti << "    <Piece Extent=\"0 " << nx-1 << " 0 " << ny-1
+    << " " << k_begin << " " << k_end << "\">\n";
+vti << "      <PointData>\n";
 
-Each voxel at grid position `(i, j, k)` references 8 corner nodes. VTK requires a specific node ordering for `VTK_VOXEL` (type 11):
-
-```
-       6─────7          Node layout (VTK spec):
-      /|    /|           n0 = (i,   j,   k  )  →  min corner
-     4─────5 |           n1 = (i+1, j,   k  )  →  +X
-     | 2───|─3           n2 = (i,   j+1, k  )  →  +Y
-     |/    |/            n3 = (i+1, j+1, k  )  →  +X+Y
-     0─────1             n4 = (i,   j,   k+1)  →  +Z
-                         n5 = (i+1, j,   k+1)  →  +X+Z
-                         n6 = (i,   j+1, k+1)  →  +Y+Z
-                         n7 = (i+1, j+1, k+1)  →  +X+Y+Z
-```
-
-Important: The Y-axis nodes (n2, n3, n6, n7) follow the same low-to-high ordering as X, NOT the counterclockwise winding used by `VTK_HEXAHEDRON`. Getting this wrong causes the volume renderer to produce artifacts or refuse to render.
-
-```cpp
-// Pre-compute stride constants to avoid repeated multiplications in the loop.
-// sj: number of nodes per Y-row (= nx+1)
-// sk: number of nodes per Z-layer (= (nx+1)*(ny+1))
-const uint32_t sj = static_cast<uint32_t>(nx_nodes);
-const uint32_t sk = static_cast<uint32_t>(nx_nodes * ny_nodes);
-
-// Pre-allocate to exact size — no dynamic resizing during the loop.
-std::vector<uint32_t> connectivity(piece_cells * 8);
-std::vector<uint32_t> offsets(piece_cells);         // cumulative node counts
-std::vector<uint8_t>  types(piece_cells, 11);        // VTK_VOXEL = 11
-
-uint64_t ci = 0;
-for (uint64_t k = 0; k < k_len; ++k) {
-  for (uint64_t j = 0; j < ny; ++j) {
-    for (uint64_t i = 0; i < nx; ++i) {
-      // `base` is the node index of the (i,j,k) corner within this piece.
-      uint32_t base = i + j * sj + k * sk;
-
-      // Write all 8 connectivity entries directly to the pre-allocated slot.
-      // Using a raw pointer avoids the overhead of vector::push_back.
-      uint32_t* c = &connectivity[ci * 8];
-      c[0] = base;           // (i,   j,   k  )
-      c[1] = base + 1;       // (i+1, j,   k  )
-      c[2] = base + sj;      // (i,   j+1, k  )
-      c[3] = base + 1 + sj;  // (i+1, j+1, k  )
-      c[4] = base + sk;      // (i,   j,   k+1)
-      c[5] = base + 1 + sk;  // (i+1, j,   k+1)
-      c[6] = base + sj + sk; // (i,   j+1, k+1)
-      c[7] = base + 1 + sj + sk; // (i+1, j+1, k+1)
-
-      // VTK_VOXEL has 8 nodes per cell, so the offset for cell ci is (ci+1)*8.
-      offsets[ci] = static_cast<uint32_t>((ci + 1) * 8);
-      ++ci;
-    }
-  }
-}
-```
-
-#### CellData: Concentration and Gradient
-
-Because the BioDynaMo grid stores one concentration value **per box center** (not per corner node), the data is attached as `<CellData>` — one value per VTK cell, not per VTK point.
-
-```cpp
-vtu << "      <CellData>\n";
-
-// data_start is the flat array index of the first box in this Z-slab.
-// The concentration array is stored in Z-major order: all boxes for z=0,
-// then all boxes for z=1, etc.
+// Grid layout is Z-outer, Y-middle, X-inner.
+// The slab starting at k_begin is contiguous in memory.
 const uint64_t data_start = k_begin * static_cast<uint64_t>(nx * ny);
-
-if (vd.concentration) {
-  // &conc[data_start] points directly into the DiffusionGrid's internal
-  // array — no copying. The VTU writer will read piece_cells * sizeof(real_t)
-  // bytes starting from that pointer when writing the binary block.
+if (vd.concentration)
   append_array(rt, "Substance Concentration", 1,
                &conc[data_start], piece_cells, sizeof(real_t));
-}
-if (vd.gradient) {
-  // The gradient array stores 3 components per box interleaved:
-  // gx0,gy0,gz0, gx1,gy1,gz1, ...
-  // So the start of this piece's gradient data is at data_start * 3.
+if (vd.gradient)
   append_array(rt, "Diffusion Gradient", 3,
                &grad[data_start * 3], piece_cells, sizeof(real_t));
-}
 ```
+
+#### `WriteDiffusionStepVtu()` — alternative VTK_VOXEL output
+
+Produces `.vtu` + `.pvtu` files.  Each diffusion box is represented as a `VTK_VOXEL` cell (type 11) with eight explicit corner nodes. Data is stored as `CellData` — one value per voxel centre. This implementation is complete and correct but not active by default.
+
+Corner node coordinates (no `+0.5` offset — these are corners, not centres):
+
+```cpp
+for (uint64_t kl = 0; kl <= k_len; ++kl)
+  for (uint64_t j = 0; j <= ny; ++j)
+    for (uint64_t i = 0; i <= nx; ++i) {
+      pts[idx++] = dims[0] + i * box;
+      pts[idx++] = dims[2] + j * box;
+      pts[idx++] = dims[4] + (k_begin + kl) * box;
+    }
+```
+
+VTK_VOXEL node ordering (type 11):
+
+```
+       6─────7          n0 = (i,   j,   k  )   n1 = (i+1, j,   k  )
+      /|    /|          n2 = (i,   j+1, k  )   n3 = (i+1, j+1, k  )
+     4─────5 |          n4 = (i,   j,   k+1)   n5 = (i+1, j,   k+1)
+     | 2───|─3          n6 = (i,   j+1, k+1)   n7 = (i+1, j+1, k+1)
+     |/    |/
+     0─────1
+```
+
+The Y-axis nodes follow the same low-to-high ordering as X (not counterclockwise face winding as in `VTK_HEXAHEDRON`).  Getting this wrong causes degenerate cells.
 
 ---
 
@@ -796,29 +737,27 @@ This table covers every significant dimension of the two implementations.
 | **Build flag** | `-Dparaview=ON` (default) | `-Dstandalone_visualization=ON` |
 | **Plugin library** | `libVisualizationAdaptor.so` (built from `src/core/visualization/paraview/`) | `libVisualizationAdaptor.so` (built from `src/core/visualization/standalone/`) |
 | **Agent file format** | VTU (via VTK's `vtkUnstructuredGrid`) | VTU (hand-written XML + raw binary) |
-| **Diffusion file format** | **VTI** (VTK Image Data — implicit structured grid) | **VTU** (Unstructured Grid with `VTK_VOXEL` cells) |
-| **Diffusion data placement** | `PointData` on `vtkImageData` (box centers as "points") | `CellData` on `VTK_VOXEL` (boxes as hexahedral cells) |
-| **Parallel index format** | `.pvti` for diffusion, `.pvtu` for agents | `.pvtu` for both |
-| **ParaView volume rendering** | Native (VTI is a structured image, direct volume mapper) | Works via `vtkUnstructuredGridVolumeMapper` which decomposes voxels into tetrahedra |
+| **Diffusion file format** | **VTI** (VTK Image Data — implicit structured grid) | **VTI** by default; **VTU** with `VTK_VOXEL` cells available as alternative |
+| **Diffusion data placement** | `PointData` on `vtkImageData` (box centers as "points") | `PointData` at box centres (VTI default); `CellData` on `VTK_VOXEL` (VTU alternative) |
+| **Parallel index format** | `.pvti` for diffusion, `.pvtu` for agents | `.pvti` for diffusion, `.pvtu` for agents |
+| **ParaView volume rendering** | Native (VTI is a structured image, `vtkSmartVolumeMapper`) | Native (VTI with PointData, `vtkSmartVolumeMapper`) |
 | **Parallelism mechanism** | OpenMP (via VTK's parallel writer) | OpenMP (each thread writes its own `.vtu` file) |
 | **Data copy** | VTK arrays hold references to BioDynaMo's memory via `SetArray(..., 1)` (zero-copy) | Zero-copy for diffusion (pointer into DiffusionGrid's array); copy for agents (flat pre-extracted arrays) |
 | **In-situ (live) visualization** | Supported via Catalyst pipeline | Not supported (export only) |
 | **PVSM state file generation** | Yes (auto-generated Python Catalyst state) | Not generated |
 | **bdm.toml adaptor name** | `adaptor = "paraview"` (default if not set) | `adaptor = "standalone"` |
 
-### Why VTI vs VTU for Diffusion?
+### Why VTI for Diffusion?
 
-The ParaView adaptor uses `vtkImageData` (`.vti` files) for diffusion because it is the most compact and efficient format for a uniform structured grid — there are no coordinate arrays at all, just `Origin`, `Spacing`, and `Dimensions` in the XML header. VTK's rendering pipeline has a dedicated fast path for ImageData.
+Both adaptors use VTI (`.vti` files) for diffusion.  VTI is the most compact and efficient format for a uniform structured grid: the geometry is fully described by `Origin`, `Spacing`, and `Extent` — no coordinate arrays are stored at all.  VTK's rendering pipeline has a dedicated fast path for ImageData.
 
-The standalone adaptor cannot produce `.vti` files without linking against VTK (the `vtkImageData` class is what generates the format). Instead it produces `.vtu` files with explicit `VTK_VOXEL` hexahedral cells. The data is stored as `CellData` (one value per voxel), which matches the physical meaning: each diffusion box has exactly one concentration value at its center.
+The standalone adaptor writes VTI by hand, using only `std::fstream`, without any VTK library dependency.
 
-### Why `CellData` and Not `PointData` for Voxels?
+### Why `PointData` and Not `CellData` for the VTI Format?
 
-In VTK:
-- **PointData** lives at the 8 corner nodes of a hexahedron. Using it for diffusion would imply that the concentration is known at the corners and interpolated inside the voxel — which is not how BioDynaMo's solver works.
-- **CellData** lives at the cell center (conceptually). One value per cell. This correctly represents a cell-centered finite difference scheme.
+`vtkSmartVolumeMapper` (ParaView's default volume renderer for structured grids) requires data in `PointData`.  The standalone VTI output stores concentration and gradient as `PointData` with `Origin` set to the first box centre and `Spacing` equal to the box length.  This means each VTK "node" sits exactly at a BioDynaMo box centre, so the physical meaning is preserved even though the VTK format calls it `PointData`.
 
-Additionally, `CellData` is required for **volume rendering** in ParaView's `vtkOpenGLProjectedTetrahedraMapper`: the mapper decomposes each hexahedral voxel into tetrahedra internally and maps the scalar value to each tetrahedron.
+The alternative VTU implementation uses `CellData` on `VTK_VOXEL` hexahedral cells, which is physically correct for a cell-centred finite-difference scheme, but requires `vtkUnstructuredGridVolumeMapper` instead of `vtkSmartVolumeMapper` for volume rendering.
 
 ---
 
@@ -897,15 +836,15 @@ output/{simulation_name}/viz/
 ├── agents_10.pvtu                     # step 10 agent index
 ├── agents_10_p0.vtu
 │   …
-├── diffusion_Substance_0_0.pvtu       # step 0 diffusion index for Substance_0
-├── diffusion_Substance_0_0_p0.vtu     # step 0 diffusion, Z-slab 0
-├── diffusion_Substance_0_0_p1.vtu     # step 0 diffusion, Z-slab 1
+├── diffusion_Substance_0_0.pvti       # step 0 diffusion index for Substance_0
+├── diffusion_Substance_0_0_p0.vti     # step 0 diffusion, Z-slab 0
+├── diffusion_Substance_0_0_p1.vti     # step 0 diffusion, Z-slab 1
 │   …
-└── diffusion_Substance_0_10.pvtu      # step 10 diffusion index
+└── diffusion_Substance_0_10.pvti      # step 10 diffusion index
     …
 ```
 
-To open in ParaView: **File → Open** the `.pvtu` files. ParaView will automatically load all referenced piece files. Use the `Colour by` dropdown to select `Substance Concentration` or `Diffusion Gradient`. To volume-render the diffusion, change `Representation` from `Surface` to `Volume`.
+To open in ParaView: **File → Open** the `.pvtu` files for agents and the `.pvti` files for diffusion. ParaView will automatically load all referenced piece files. Use the `Colour by` dropdown to select `Substance Concentration` or `Diffusion Gradient`. To volume-render the diffusion, change `Representation` from `Surface` to `Volume`.
 
 ---
 

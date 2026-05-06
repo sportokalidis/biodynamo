@@ -19,7 +19,7 @@
 #include "core/param/param.h"       // export_visualization, visualization_interval
 #include "core/scheduler.h"         // GetSimulatedSteps()
 #include "core/simulation.h"        // Simulation::GetActive(), GetOutputDir()
-#include "core/visualization/standalone/standalone_vtu_exporter.h"
+#include "core/visualization/standalone/standalone_exporter.h"
 
 namespace bdm {
 
@@ -42,7 +42,7 @@ StandaloneAdaptor::~StandaloneAdaptor() { delete exporter_; }
 ///
 ///  Phase 1 — lazy initialisation (runs only on the very first call):
 ///    Creates the output sub-directory "viz/" inside the simulation's output
-///    directory and allocates the StandaloneVtuExporter.  This is deferred
+///    directory and allocates the StandaloneExporter.  This is deferred
 ///    to the first Visualize() call rather than done in the constructor
 ///    because sim->GetOutputDir() is only valid after the scheduler has
 ///    started and created the directory.
@@ -66,7 +66,7 @@ void StandaloneAdaptor::Visualize() {
     // create_directories is equivalent to "mkdir -p": it succeeds even if
     // intermediate directories already exist.
     std::filesystem::create_directories(out_dir);
-    exporter_    = new StandaloneVtuExporter(out_dir);
+    exporter_    = new StandaloneExporter(out_dir);
     initialized_ = true;
   }
 
