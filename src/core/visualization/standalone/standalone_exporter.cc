@@ -14,6 +14,7 @@
 
 #include "core/visualization/standalone/standalone_exporter.h"
 
+#include <cstring>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -25,7 +26,6 @@
 #include "TDataMember.h"
 
 #include "core/agent/agent.h"           // Agent base class, GetPosition(), GetUid()
-#include "core/agent/cell.h"            // Cell subclass for mass/volume/traction
 #include "core/diffusion/diffusion_grid.h"  // DiffusionGrid, GetAllConcentrations()
 #include "core/param/param.h"           // Param::VisualizeDiffusion
 #include "core/resource_manager.h"      // ForEachAgent(), GetDiffusionGrid()
@@ -34,9 +34,39 @@
 
 namespace bdm {
 
-// Forward declaration — defined later in this translation unit.
-static bool ReadScalarMember(const Agent* agent, const std::string& name,
-                             double& out);
+
+// VTK type string and element byte size for one scalar C++ data member.
+struct NativeType { const char* vtk; size_t size; };
+
+static NativeType GetNativeType(const std::string& cpp_type) {
+  if (cpp_type == "float")                                        return {"Float32", 4};
+  if (cpp_type == "int"   || cpp_type == "Int_t")                return {"Int32",   4};
+  if (cpp_type == "unsigned int" || cpp_type == "UInt_t")        return {"UInt32",  4};
+  if (cpp_type == "short" || cpp_type == "Short_t")              return {"Int16",   2};
+  if (cpp_type == "unsigned short" || cpp_type == "UShort_t")    return {"UInt16",  2};
+  if (cpp_type == "uint64_t" || cpp_type == "unsigned long"
+                             || cpp_type == "unsigned long long"
+                             || cpp_type == "ULong64_t")         return {"UInt64",  8};
+  if (cpp_type == "int64_t"  || cpp_type == "long long"
+                             || cpp_type == "Long64_t")          return {"Int64",   8};
+  return {"Float64", 8};  // double or unknown — safe fallback
+}
+
+// Copy elem_size raw bytes of field `name` from agent into `out`.
+// Requires the same TDataMember lookup as ReadScalarMember but stores the
+// value in its native binary representation instead of converting to double.
+static void ReadRawMember(const Agent* agent, const std::string& name,
+                          char* out, size_t elem_size) {
+  TClass*      cls = TClass::GetClass(typeid(*agent));
+  TDataMember* dm  = cls ? cls->GetDataMember(name.c_str()) : nullptr;
+  if (dm) {
+    std::memcpy(out,
+                reinterpret_cast<const char*>(agent) + dm->GetOffset(),
+                elem_size);
+  } else {
+    std::memset(out, 0, elem_size);
+  }
+}
 
 // -----------------------------------------------------------------------------
 /// Parse bdm.toml to extract scalar member names from additional_data_members.
@@ -130,15 +160,27 @@ void StandaloneExporter::WriteStep() {
   // ── Read user-defined extra scalar fields via ROOT reflection ─────────────
   //
   // extra_members_ was loaded from bdm.toml once in the constructor; no file
-  // I/O happens here.  ReadScalarMember uses TDataMember::GetOffset() to
-  // locate each field in the actual derived type at runtime.
-  std::vector<std::vector<double>> extra_vals(extra_members_.size());
-  for (size_t f = 0; f < extra_members_.size(); ++f) {
-    extra_vals[f].resize(n);
-    for (size_t i = 0; i < n; ++i) {
-      double val = 0.0;
-      ReadScalarMember(agents[i], extra_members_[f], val);
-      extra_vals[f][i] = val;
+  // I/O happens here.  Each field is stored in its native binary type so that
+  // the VTU file uses the correct VTK type (Int32 for int fields, Float32 for
+  // float, etc.) rather than widening everything to Float64.
+  struct ExtraField {
+    NativeType          type;           // vtk type name + element byte size
+    std::vector<char>   data;           // n * type.size raw bytes
+  };
+  std::vector<ExtraField> extra_fields(extra_members_.size());
+  if (n > 0) {
+    for (size_t f = 0; f < extra_members_.size(); ++f) {
+      // Resolve type from the first agent; all agents share the same class.
+      TClass*      cls = TClass::GetClass(typeid(*agents[0]));
+      TDataMember* dm  = cls ? cls->GetDataMember(extra_members_[f].c_str())
+                             : nullptr;
+      extra_fields[f].type = dm ? GetNativeType(dm->GetTypeName())
+                                : NativeType{"Float64", 8};
+      extra_fields[f].data.resize(n * extra_fields[f].type.size, 0);
+      for (size_t i = 0; i < n; ++i)
+        ReadRawMember(agents[i], extra_members_[f],
+                      extra_fields[f].data.data() + i * extra_fields[f].type.size,
+                      extra_fields[f].type.size);
     }
   }
 
@@ -165,8 +207,10 @@ void StandaloneExporter::WriteStep() {
     vtu << "<VTKFile type=\"UnstructuredGrid\" version=\"0.1\""
            " byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
     vtu << "  <UnstructuredGrid>\n";
+    // NumberOfCells=0: VTK_VERTEX topology is trivially the identity and adds
+    // no information.  ParaView renders point clouds correctly without it.
     vtu << "    <Piece NumberOfPoints=\"" << count
-        << "\" NumberOfCells=\""          << count << "\">\n";
+        << "\" NumberOfCells=\"0\">\n";
     vtu << "      <PointData>\n";
 
     // The VTK "appended raw" format separates metadata (XML tags with offsets)
@@ -190,13 +234,15 @@ void StandaloneExporter::WriteStep() {
       offset += 4 + bytes;
     };
 
-    // Slices into the pre-extracted flat arrays using `begin` as the offset.
-    // No data is copied — the pointers reference the original buffers.
-    append_array("UInt64",  "Cell_ID",  1, &ids[begin],   count, sizeof(uint64_t));
-    append_array("Float64", "Diameter", 1, &diam[begin],  count, sizeof(double));
-    for (size_t f = 0; f < extra_members_.size(); ++f)
-      append_array("Float64", extra_members_[f], 1,
-                   &extra_vals[f][begin], count, sizeof(double));
+    // Slices into pre-extracted flat arrays — no data is copied.
+    append_array("UInt64",  "Cell_ID",  1, &ids[begin],  count, sizeof(uint64_t));
+    append_array("Float64", "Diameter", 1, &diam[begin], count, sizeof(double));
+    for (size_t f = 0; f < extra_fields.size(); ++f) {
+      const auto& ef = extra_fields[f];
+      append_array(ef.type.vtk, extra_members_[f], 1,
+                   ef.data.data() + begin * ef.type.size,
+                   count, ef.type.size);
+    }
 
     for (auto& m : metas) vtu << m.tag;
     vtu << "      </PointData>\n";
@@ -212,48 +258,7 @@ void StandaloneExporter::WriteStep() {
       offset += 4 + static_cast<uint32_t>(count * 3 * sizeof(double));
     }
     vtu << "      </Points>\n";
-
-    // VTK_VERTEX (type code 1) is a 0-D cell with one node.
-    // Connectivity: identity [0,1,…,count-1].
-    // Offsets: cumulative [1,2,3,…,count].
-    // Types: all 1 (VTK_VERTEX).
-    std::vector<int32_t> conn(count), offs(count);
-    std::vector<uint8_t> types_arr(count);
-    for (uint64_t i = 0; i < count; ++i) {
-      conn[i]      = static_cast<int32_t>(i);
-      offs[i]      = static_cast<int32_t>(i + 1);
-      types_arr[i] = 1;
-    }
-
-    vtu << "      <Cells>\n";
-    {
-      std::ostringstream tag;
-      tag << "        <DataArray type=\"Int32\" Name=\"connectivity\""
-             " format=\"appended\" offset=\"" << offset << "\"/>\n";
-      vtu << tag.str();
-      metas.push_back({"", static_cast<uint32_t>(count * sizeof(int32_t)),
-                       reinterpret_cast<const char*>(conn.data())});
-      offset += 4 + static_cast<uint32_t>(count * sizeof(int32_t));
-    }
-    {
-      std::ostringstream tag;
-      tag << "        <DataArray type=\"Int32\" Name=\"offsets\""
-             " format=\"appended\" offset=\"" << offset << "\"/>\n";
-      vtu << tag.str();
-      metas.push_back({"", static_cast<uint32_t>(count * sizeof(int32_t)),
-                       reinterpret_cast<const char*>(offs.data())});
-      offset += 4 + static_cast<uint32_t>(count * sizeof(int32_t));
-    }
-    {
-      std::ostringstream tag;
-      tag << "        <DataArray type=\"UInt8\" Name=\"types\""
-             " format=\"appended\" offset=\"" << offset << "\"/>\n";
-      vtu << tag.str();
-      metas.push_back({"", static_cast<uint32_t>(count * sizeof(uint8_t)),
-                       reinterpret_cast<const char*>(types_arr.data())});
-      offset += 4 + static_cast<uint32_t>(count * sizeof(uint8_t));
-    }
-    vtu << "      </Cells>\n";
+    vtu << "      <Cells/>\n";
 
     vtu << "    </Piece>\n";
     vtu << "  </UnstructuredGrid>\n";
@@ -274,37 +279,11 @@ void StandaloneExporter::WriteStep() {
   // step_ is NOT incremented here — WriteDiffusionStep() does it after both
   // file families are written so agents_{N} and diffusion_{name}_{N} always
   // share the same N.
-  WritePvtu(static_cast<int>(num_pieces));
-}
-
-// -----------------------------------------------------------------------------
-/// Read one scalar numeric data member from an agent object using ROOT's
-/// runtime reflection API.
-///
-/// TClass::GetClass(typeid(*agent)) resolves the actual derived type (e.g.
-/// "MyCell"), not the base class, so user-defined fields on custom agent
-/// subclasses are found correctly.
-///
-/// TDataMember::GetOffset() returns the byte offset of the field — equivalent
-/// to offsetof() but computed at runtime from the ROOT dictionary.
-static bool ReadScalarMember(const Agent* agent, const std::string& name,
-                             double& out) {
-  TClass* cls = TClass::GetClass(typeid(*agent));
-  if (!cls) return false;
-  TDataMember* dm = cls->GetDataMember(name.c_str());
-  if (!dm)  return false;
-
-  const char* addr = reinterpret_cast<const char*>(agent) + dm->GetOffset();
-  std::string tname = dm->GetTypeName();
-
-  if (tname == "double") { out = *reinterpret_cast<const double*>(addr); return true; }
-  if (tname == "float")  { out = static_cast<double>(*reinterpret_cast<const float*>(addr));  return true; }
-  if (tname == "int")    { out = static_cast<double>(*reinterpret_cast<const int*>(addr));    return true; }
-  if (tname == "uint64_t" || tname == "unsigned long" || tname == "unsigned long long") {
-    out = static_cast<double>(*reinterpret_cast<const unsigned long long*>(addr));
-    return true;
-  }
-  return false;
+  std::vector<std::pair<std::string, std::string>> extra_type_info;
+  for (size_t f = 0; f < extra_members_.size(); ++f)
+    extra_type_info.emplace_back(extra_members_[f],
+                                 n > 0 ? extra_fields[f].type.vtk : "Float64");
+  WritePvtu(static_cast<int>(num_pieces), extra_type_info);
 }
 
 // -----------------------------------------------------------------------------
@@ -313,7 +292,10 @@ static bool ReadScalarMember(const Agent* agent, const std::string& name,
 /// Mirrors the PointData schema from the piece files so that ParaView can
 /// discover available fields without loading every piece.
 /// Uses extra_members_ (cached at construction) — no file I/O per call.
-void StandaloneExporter::WritePvtu(int pieces) const {
+void StandaloneExporter::WritePvtu(
+    int pieces,
+    const std::vector<std::pair<std::string, std::string>>& extra_type_info)
+    const {
   std::ostringstream name;
   name << output_dir_ << "/agents_" << step_ << ".pvtu";
   std::ofstream pvtu(name.str());
@@ -328,8 +310,8 @@ void StandaloneExporter::WritePvtu(int pieces) const {
           " NumberOfComponents=\"1\"/>\n";
   pvtu << "      <PDataArray type=\"Float64\" Name=\"Diameter\""
           " NumberOfComponents=\"1\"/>\n";
-  for (const auto& field : extra_members_)
-    pvtu << "      <PDataArray type=\"Float64\" Name=\"" << field
+  for (const auto& fi : extra_type_info)
+    pvtu << "      <PDataArray type=\"" << fi.second << "\" Name=\"" << fi.first
          << "\" NumberOfComponents=\"1\"/>\n";
   pvtu << "    </PPointData>\n";
 

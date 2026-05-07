@@ -51,6 +51,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace bdm {
@@ -110,7 +111,9 @@ class StandaloneExporter {
   std::vector<std::string> extra_members_;
 
   /// Write the parallel agent index file (agents_{step}.pvtu).
-  void WritePvtu(int pieces) const;
+  void WritePvtu(int pieces,
+                 const std::vector<std::pair<std::string, std::string>>&
+                     extra_type_info) const;
 
   /// Write VTI piece files + PVTI index for all diffusion substances.
   /// Uses VTK ImageData (PointData at box centres, no explicit geometry).
