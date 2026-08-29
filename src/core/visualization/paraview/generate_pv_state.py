@@ -81,11 +81,15 @@ def BuildDefaultPipeline(json_filename):
 
     sim_info = build_info['simulation']
 
-    # change directory
+    # normalize result directory to absolute path for robust PVSM regardless of working directory
     result_dir = sim_info['result_dir']
     if result_dir != "" and not os.path.exists(result_dir):
         print('Simulation result directory "{0}" does not exist'.format(result_dir))
         sys.exit(1)
+    abs_result_dir = os.path.abspath(result_dir) if result_dir != "" else os.getcwd()
+    # store back the absolute path so WritePvsmFile can use it and use it for readers
+    sim_info['result_dir'] = abs_result_dir
+    result_dir = abs_result_dir
 
     # get active view
     render_view = GetActiveViewOrCreate('RenderView')
@@ -110,10 +114,8 @@ def BuildDefaultPipeline(json_filename):
 # ------------------------------------------------------------------------------
 def WritePvsmFile(build_info):
     sim_info = build_info['simulation']
-    result_dir = sim_info['result_dir']
-
-    os.chdir(result_dir)
-    SaveState('{0}.pvsm'.format(sim_info['name']))
+    # write PVSM to the result directory using absolute path
+    SaveState(os.path.join(sim_info['result_dir'], '{0}.pvsm'.format(sim_info['name'])))
 
     # This avoid the error: Inconsistency detected by ld.so
     # See: https://discourse.paraview.org/t/inconsistency-detected-by-ld-so/3778
