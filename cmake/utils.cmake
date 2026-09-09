@@ -197,6 +197,141 @@ function(bdm_paraview_platform out_tar out_key)
     set(${out_key} "${PARAVIEW_OS_VERS}-ParaView" PARENT_SCOPE)
 endfunction()
 
+# The macOS ROOT tarballs on the LFS server were built on a host with MacPorts
+# and XQuartz installed, so a handful of their libraries carry absolute install
+# names into /opt/local and /opt/X11. BioDynaMo supports Homebrew only, so on
+# every supported machine those libraries fail to load with
+# "Library not loaded: /opt/local/lib/...".
+#
+# This function repoints them at equivalents that do exist. It is deliberately
+# conservative: a dependency is only rewritten when a replacement with the
+# *identical* library basename is available, because the basename carries the
+# soname and hence the ABI major version. Anything else is reported rather than
+# guessed at - see BDM_ROOT_UNFIXABLE_DEPS below for why that matters.
+#
+# Safe to call repeatedly: an already-patched tree has no matching install names
+# left, so subsequent calls are no-ops.
+function(fix_root_install_names ROOT_PREFIX)
+    if(NOT APPLE)
+        return()
+    endif()
+
+    find_program(BDM_OTOOL otool)
+    find_program(BDM_INSTALL_NAME_TOOL install_name_tool)
+    if(NOT BDM_OTOOL OR NOT BDM_INSTALL_NAME_TOOL)
+        message(WARNING "otool and/or install_name_tool were not found. Skipping the "
+            "ROOT install name fixup; some ROOT libraries may fail to load.")
+        return()
+    endif()
+
+    # Never rewrite a ROOT installation that we did not download ourselves. A
+    # user who sources their own ROOT must get it back exactly as they built it.
+    if(NOT CMAKE_THIRD_PARTY_DIR)
+        return()
+    endif()
+    string(FIND "${ROOT_PREFIX}" "${CMAKE_THIRD_PARTY_DIR}" BDM_ROOT_IN_TREE)
+    if(NOT BDM_ROOT_IN_TREE EQUAL 0)
+        message(STATUS "ROOT at ${ROOT_PREFIX} is user provided; leaving its install names untouched.")
+        return()
+    endif()
+
+    # Replacement table. Each entry is "<bad install name>|<formula>|<relative lib path>".
+    # An empty formula means the replacement is provided by macOS itself.
+    #
+    # Every entry here has been checked by loading the affected ROOT library
+    # afterwards; do not add one without doing the same, because a same-named
+    # library is not automatically a compatible one.
+    set(BDM_ROOT_DEP_FIXES
+        "/opt/local/lib/libxml2.2.dylib||/usr/lib/libxml2.2.dylib"
+        "/opt/local/lib/libjpeg.8.dylib|jpeg-turbo|lib/libjpeg.8.dylib"
+        "/opt/local/lib/libtiff.6.dylib|libtiff|lib/libtiff.6.dylib"
+        "/opt/X11/lib/libpng16.16.dylib|libpng|lib/libpng16.16.dylib"
+    )
+
+    # Dependencies we know cannot be repointed, with the user visible effect.
+    # Fixing these requires rebuilding the tarball on a Homebrew host.
+    # NOTE: no semicolons in these strings. A ';' inside a quoted CMake string is
+    # still a list separator once the variable is expanded in foreach(), which
+    # would split an entry and break the list(GET) calls below.
+    set(BDM_ROOT_UNFIXABLE_DEPS
+        "/opt/local/lib/libgif.4.dylib|libASImage|Homebrew ships giflib 6, which removed AddExtensionBlock() and EGifPutExtensionFirst/Last(), so repointing yields a 'Symbol not found' error rather than a working library. Canvas export to PNG, GIF and JPEG is therefore unavailable (SVG and PDF still work)."
+        "/Library/Frameworks/Python.framework/Versions/3.11/Python|libROOTTPython|the tarball links python.org's Python 3.11 framework even though it is labelled python3.9, and CPython's C ABI is version specific. ROOT's TPython bridge is therefore unavailable."
+    )
+
+    find_program(BDM_BREW brew)
+    file(GLOB BDM_ROOT_LIBS "${ROOT_PREFIX}/lib/*.so" "${ROOT_PREFIX}/lib/*.dylib")
+    set(BDM_FIXED_COUNT 0)
+
+    foreach(BDM_FIX ${BDM_ROOT_DEP_FIXES})
+        string(REPLACE "|" ";" BDM_FIX_PARTS "${BDM_FIX}")
+        list(GET BDM_FIX_PARTS 0 BDM_BAD_NAME)
+        list(GET BDM_FIX_PARTS 1 BDM_FORMULA)
+        list(GET BDM_FIX_PARTS 2 BDM_REL_PATH)
+
+        if("${BDM_FORMULA}" STREQUAL "")
+            # Provided by macOS. Note we cannot test this path with EXISTS:
+            # /usr/lib is served from the dyld shared cache and its members are
+            # not present on disk, yet they load fine.
+            set(BDM_NEW_NAME "${BDM_REL_PATH}")
+        else()
+            if(NOT BDM_BREW)
+                continue()
+            endif()
+            execute_process(COMMAND ${BDM_BREW} --prefix ${BDM_FORMULA}
+                            OUTPUT_VARIABLE BDM_FORMULA_PREFIX
+                            OUTPUT_STRIP_TRAILING_WHITESPACE
+                            ERROR_QUIET)
+            if(NOT BDM_FORMULA_PREFIX OR NOT EXISTS "${BDM_FORMULA_PREFIX}/${BDM_REL_PATH}")
+                continue()
+            endif()
+            set(BDM_NEW_NAME "${BDM_FORMULA_PREFIX}/${BDM_REL_PATH}")
+        endif()
+
+        foreach(BDM_LIB ${BDM_ROOT_LIBS})
+            execute_process(COMMAND ${BDM_OTOOL} -L "${BDM_LIB}"
+                            OUTPUT_VARIABLE BDM_OTOOL_OUT
+                            ERROR_QUIET)
+            # Literal search: an install name contains '.' and '/', which
+            # MATCHES would interpret as regex metacharacters.
+            string(FIND "${BDM_OTOOL_OUT}" "${BDM_BAD_NAME}" BDM_DEP_POS)
+            if(BDM_DEP_POS EQUAL -1)
+                continue()
+            endif()
+            execute_process(COMMAND ${BDM_INSTALL_NAME_TOOL}
+                                    -change "${BDM_BAD_NAME}" "${BDM_NEW_NAME}" "${BDM_LIB}"
+                            RESULT_VARIABLE BDM_INT_RESULT
+                            ERROR_VARIABLE BDM_INT_ERROR)
+            if(BDM_INT_RESULT EQUAL 0)
+                math(EXPR BDM_FIXED_COUNT "${BDM_FIXED_COUNT} + 1")
+            else()
+                message(WARNING "Could not repoint ${BDM_BAD_NAME} in ${BDM_LIB}: ${BDM_INT_ERROR}")
+            endif()
+        endforeach()
+    endforeach()
+
+    if(BDM_FIXED_COUNT GREATER 0)
+        message(STATUS "Repointed ${BDM_FIXED_COUNT} MacPorts/XQuartz install name(s) in ROOT at Homebrew and system libraries")
+    endif()
+
+    # Tell the user about the ones we cannot repair, but only if the affected
+    # library is actually still broken in this tree.
+    foreach(BDM_BROKEN ${BDM_ROOT_UNFIXABLE_DEPS})
+        string(REPLACE "|" ";" BDM_BROKEN_PARTS "${BDM_BROKEN}")
+        list(GET BDM_BROKEN_PARTS 0 BDM_BAD_NAME)
+        list(GET BDM_BROKEN_PARTS 1 BDM_AFFECTED)
+        list(GET BDM_BROKEN_PARTS 2 BDM_EFFECT)
+        if(EXISTS "${ROOT_PREFIX}/lib/${BDM_AFFECTED}.so")
+            execute_process(COMMAND ${BDM_OTOOL} -L "${ROOT_PREFIX}/lib/${BDM_AFFECTED}.so"
+                            OUTPUT_VARIABLE BDM_OTOOL_OUT ERROR_QUIET)
+            string(FIND "${BDM_OTOOL_OUT}" "${BDM_BAD_NAME}" BDM_DEP_POS)
+            if(NOT BDM_DEP_POS EQUAL -1)
+                message(WARNING "${BDM_AFFECTED} in the prebuilt ROOT depends on ${BDM_BAD_NAME}, "
+                    "which is not available on a Homebrew system: ${BDM_EFFECT}")
+            endif()
+        endif()
+    endforeach()
+endfunction()
+
 # Try to find the ROOT package. It is an hard requirement
 # for the project. If ROOT is not found on the system, it
 # will be downloaded. If the found cached ROOT is not the right

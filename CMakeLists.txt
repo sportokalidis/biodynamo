@@ -322,62 +322,20 @@ find_package(Git)
 find_package(ROOT COMPONENTS Geom Gui GenVector)
 verify_ROOT()
 
-# Fix hardcoded keg-only library paths in ROOT on macOS
-if(APPLE)
-  find_program(BREW_BIN brew)
-  if(BREW_BIN AND ROOT_INCLUDE_DIRS)
-    execute_process(COMMAND ${BREW_BIN} --prefix zlib
-                    OUTPUT_VARIABLE ZLIB_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-    execute_process(COMMAND ${BREW_BIN} --prefix zstd
-                    OUTPUT_VARIABLE ZSTD_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-    execute_process(COMMAND ${BREW_BIN} --prefix ncurses
-                    OUTPUT_VARIABLE NCURSES_BREW_PREFIX
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-
-    # Get ROOT library directory
-    string(REGEX REPLACE "/include$" "/lib" ROOT_LIB_DIR ${ROOT_INCLUDE_DIRS})
-
-    # Get list of all ROOT libraries that might need fixing
-    file(GLOB ROOT_LIBS "${ROOT_LIB_DIR}/*.so" "${ROOT_LIB_DIR}/*.dylib")
-
-    if(ROOT_LIBS)
-      foreach(ROOT_LIB ${ROOT_LIBS})
-        # Fix zlib paths
-        if(EXISTS "${ZLIB_BREW_PREFIX}/lib/libz.1.dylib")
-          execute_process(COMMAND install_name_tool -change 
-                                  /opt/local/lib/libz.1.dylib 
-                                  ${ZLIB_BREW_PREFIX}/lib/libz.1.dylib 
-                                  ${ROOT_LIB}
-                          ERROR_QUIET)
-        endif()
-
-        # Fix zstd paths  
-        if(EXISTS "${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib")
-          execute_process(COMMAND install_name_tool -change 
-                                  /opt/local/lib/libzstd.1.dylib 
-                                  ${ZSTD_BREW_PREFIX}/lib/libzstd.1.dylib 
-                                  ${ROOT_LIB}
-                          ERROR_QUIET)
-        endif()
-
-        # Fix ncurses paths
-        if(EXISTS "${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib")
-          execute_process(COMMAND install_name_tool -change 
-                                  /opt/local/lib/libncurses.6.dylib 
-                                  ${NCURSES_BREW_PREFIX}/lib/libncurses.6.dylib 
-                                  ${ROOT_LIB}
-                          ERROR_QUIET)
-        endif()
-      endforeach()
-
-      message(STATUS "Fixed keg-only library paths in ROOT libraries")
-    endif()
-  endif()
+# The prebuilt macOS ROOT tarballs were built on a host with MacPorts and
+# XQuartz, so some of their libraries carry absolute install names into
+# /opt/local and /opt/X11 and fail to load on a supported (Homebrew) system.
+# Repoint the ones that can be repointed and report the rest. Only ever touches
+# a ROOT we downloaded ourselves; see fix_root_install_names() in cmake/utils.cmake.
+#
+# NOTE: BioDynaMo is compiled as C++17 on every platform, including against the
+# Xcode 26 ROOT build, which is labelled cxx17 but is actually built with C++23.
+# That combination is verified (593/593 targets, 450/450 unit tests) and is the
+# reason verify_ROOT() accepts a C++20/23 ROOT instead of matching its standard.
+if(APPLE AND ROOT_FOUND AND ROOT_INCLUDE_DIRS)
+  list(GET ROOT_INCLUDE_DIRS 0 BDM_ROOT_INCLUDE_DIR)
+  string(REGEX REPLACE "/include$" "" BDM_ROOT_PREFIX "${BDM_ROOT_INCLUDE_DIR}")
+  fix_root_install_names("${BDM_ROOT_PREFIX}")
 endif()
 
 if (dict)
