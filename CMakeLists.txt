@@ -152,6 +152,7 @@ option(website   "Enable website generation (make website<-live>)." OFF)
 option(valgrind  "Enable valgrind tests and make build compatible with valgrind tool." ON)
 option(rpath     "Link libraries with built-in RPATH (run-time search path)." OFF)
 option(real_t    "Define data type for real numbers. Currently supported: float, double" double)
+option(boost     "Enable Boost-based behaviors (e.g. RegulatoryNetwork)." ON)
 
 if(APPLE)
   # ParaView on Apple devices
@@ -189,6 +190,18 @@ else()
 endif()
 
 # -------------------- find packages ------------------------------------------
+if(boost)
+  find_package(Boost)
+  if(Boost_FOUND)
+    include_directories(${Boost_INCLUDE_DIRS})
+    add_definitions("-DUSE_BOOST")
+    message(STATUS "Boost found: ${Boost_INCLUDE_DIRS}")
+  else()
+    message(WARNING "Boost not found. Boost-based behaviors (e.g. RegulatoryNetwork) will be disabled. "
+                    "Install libboost-dev (apt), boost (brew), or boost-devel (yum) to enable, or disable with -Dboost=OFF.")
+    set(boost OFF)
+  endif()
+endif()
 if (tcmalloc)
   find_package(tcmalloc)
   if(NOT TCMALLOC_FOUND)
@@ -812,18 +825,16 @@ install_inside_build()
 #---Populate the configure arguments returned by 'bdm-config --config'
 get_cmake_property(variables CACHE_VARIABLES)
 foreach(var ${variables})
-  if((var MATCHES "_(LIBRARIES|LIBRARY|INCLUDE|VERSION)") AND
-     (NOT ${${var}} STREQUAL "") AND
-     (NOT ${var} MATCHES "NOTFOUND"))
+  if(("${var}" MATCHES "_(LIBRARIES|LIBRARY|INCLUDE|VERSION)") AND
+     (NOT "${${var}}" STREQUAL "") AND
+     (NOT "${${var}}" MATCHES "NOTFOUND"))
     if (var MATCHES "^QT_")
       # filter out the very long list of Qt libraries and include dirs
       if (var MATCHES "(QT_LIBRARY_DIR|QT_QTCORE_INCLUDE_DIR)")
         set(BDM_CONFIGARGS "${BDM_CONFIGARGS}${var}=${${var}} ")
       endif()
-    else()
-      if ((NOT var MATCHES "_(DOCS|TESTS|INSTALL)") AND (NOT var MATCHES "^_"))
-        set(BDM_CONFIGARGS "${BDM_CONFIGARGS}${var}=${${var}} ")
-      endif()
+    elseif ((NOT var MATCHES "_(DOCS|TESTS|INSTALL)") AND (NOT var MATCHES "^_"))
+      set(BDM_CONFIGARGS "${BDM_CONFIGARGS}${var}=${${var}} ")
     endif()
   endif()
 endforeach()

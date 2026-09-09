@@ -54,7 +54,7 @@ First time contributor? Make sure to review our contributing guidelines:
 - [ ] **New example**
   - [ ] Make sure that the example is checked in the System CIs
   - [ ] Verify that example appears on the website after wards and works
-        (if the example showcases a new feature, the GitPod container may have
+        (if the example showcases a new feature, the Codespaces container may have
         to be updated)
   
 Merge instructions: Squash merger PRs and remove individual commit messages from

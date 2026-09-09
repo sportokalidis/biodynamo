@@ -83,7 +83,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-*.html
+
 *.root
 *.vtu
 *.pvtu

@@ -37,8 +37,12 @@ jobs:
 
         # Install exactly what util/installation/osx expects, so that this
         # workflow and a user following the prerequisites cannot drift apart.
-        # libgit2 is extra here because this job builds with -Dlibgit2=ON.
-        brew install $(cat util/installation/osx/package_list_required) libgit2
+        # libgit2 and boost are named on top of the required list because they
+        # are optional packages that this job still needs: it builds with
+        # -Dlibgit2=ON, and -Dboost=ON silently turns itself off when Boost is
+        # missing, which would stop the RegulatoryNetwork behaviour from being
+        # exercised at all.
+        brew install $(cat util/installation/osx/package_list_required) libgit2 boost
 
     # - name: Cache Third Party Packages
     #   uses: actions/cache@v4
