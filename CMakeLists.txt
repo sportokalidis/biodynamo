@@ -469,7 +469,11 @@ if(paraview)
                 if (EXISTS ${CMAKE_THIRD_PARTY_DIR}/paraview/tar-sha256)
                     # check if SHA256 of installed ParaView is the same as the expected one
                     file(READ ${CMAKE_THIRD_PARTY_DIR}/paraview/tar-sha256 TAR_SHA256)
-                    if(NOT "${TAR_SHA256}" STREQUAL "${${DETECTED_OS_VERS}-ParaView}")
+                    # Derive the key exactly the way external/ParaView.cmake
+                    # derives it, so this check cannot disagree with what was
+                    # downloaded and needlessly discard a valid ParaView.
+                    bdm_paraview_platform(PARAVIEW_TAR_FILE PARAVIEW_SHA_KEY)
+                    if(NOT "${TAR_SHA256}" STREQUAL "${${PARAVIEW_SHA_KEY}}")
                         # BDM installed ParaView has wrong SHA256... deleting it
                         message(WARNING "The found ParaView version is not compatible... deleting it...")
                         file(REMOVE_RECURSE ${CMAKE_THIRD_PARTY_DIR}/paraview)
