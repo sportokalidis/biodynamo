@@ -54,6 +54,7 @@
 #endif  // USE_LIBGIT2
 
 #include <TEnv.h>
+#include <TPluginManager.h>
 #include <TROOT.h>
 
 namespace bdm {
@@ -406,6 +407,19 @@ void Simulation::InitializeRuntimeParams(
     os << std::getenv("BDMSYS") << "/etc/bdm.rootrc";
     gEnv->ReadFile(os.str().c_str(), kEnvUser);
     read_env = true;
+    // TEMPORARY DIAGNOSTIC - macOS 26 / ROOT 6.40.04 ParaView plugin lookup
+    // investigation. An interactive `root` shell auto-runs build/rootlogon.C,
+    // which constructs its own Simulation object before any -e code runs and
+    // so pre-warms this exact lookup; that made an earlier root-based
+    // diagnostic report success on every platform regardless of what the
+    // compiled test binary itself sees. This prints from inside the actual
+    // biodynamo-unit-tests process, at the only point (guarded by read_env)
+    // where the real code performs this lookup for the first time.
+    auto *h =
+        gROOT->GetPluginManager()->FindHandler("VisualizationAdaptor", "paraview");
+    std::cerr << "DIAGNOSTIC (in-process, first Simulation ctor): "
+                 "VisualizationAdaptor/paraview handler found = "
+              << (h != nullptr) << std::endl;
   }
 
   // Process `--config` arguments

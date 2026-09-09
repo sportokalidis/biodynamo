@@ -73,28 +73,4 @@ jobs:
         root --version
         root -config
         bdm config
-        # TEMPORARY DIAGNOSTIC - remove once the ParaView plugin lookup
-        # failure on macos-26 is understood (8 tests fail with
-        # "Unable to find plugin 'paraview'" from VisualizationAdaptor::Create,
-        # first seen after the ROOT 6.40.04 upgrade for Xcode 26.6). This
-        # replicates exactly what Simulation::InitializeRuntimeParams does
-        # (read bdm.rootrc into gEnv, which sets Root.PluginPath to include
-        # $BDMSYS/etc/plugins) before checking whether TPluginManager's
-        # directory scan actually registers the handler.
-        #
-        # Verified locally against ROOT 6.36.06 that this reports 0 when
-        # bdm.rootrc is skipped and 1 when it is read, so a 0 on the runner
-        # means the scan itself is failing to find/register the handler,
-        # not that this diagnostic is trivially always negative.
-        # root -q -e exits non-zero (255, verified locally) even on a fully
-        # successful evaluation, and GitHub Actions runs bash steps with
-        # `-eo pipefail`, so an unguarded call here aborts the whole step
-        # before ninja ever runs. `|| true` makes this best-effort: only the
-        # printed line matters.
-        root -l -b -q -e '
-          gEnv->ReadFile(TString::Format("%s/etc/bdm.rootrc", gSystem->Getenv("BDMSYS")), kEnvUser);
-          gROOT->GetPluginManager()->LoadHandlersFromPluginDirs();
-          auto* h = gROOT->GetPluginManager()->FindHandler("VisualizationAdaptor", "paraview");
-          cout << "DIAGNOSTIC handler found: " << (h != nullptr) << endl;
-        ' || true
         ninja run-unit-tests
