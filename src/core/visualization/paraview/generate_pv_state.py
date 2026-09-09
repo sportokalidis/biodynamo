@@ -111,23 +111,31 @@ def WritePvsmFile(build_info, animation_scene):
     result_dir = sim_info['result_dir']
 
     os.chdir(result_dir)
-    SaveState('{0}.pvsm'.format(sim_info['name']))
+    state_file = '{0}.pvsm'.format(sim_info['name'])
 
-    # Update animation scene based on data timesteps.
-    # On headless macOS (e.g. macOS 26 CI), this triggers a render pass
-    # that may crash due to missing OpenGL context (NSOpenGLContext removed).
-    # The state file has already been saved above, so a crash here is non-fatal.
-    try:
-        animation_scene.UpdateAnimationUsingDataTimeSteps()
-    except Exception as e:
-        print('Warning: UpdateAnimationUsingDataTimeSteps failed: {0}'.format(e))
+    # Save the state twice, on purpose.
+    #
+    # UpdateAnimationUsingDataTimeSteps() triggers a render pass, which on a
+    # headless macOS 26 machine (the GitHub Actions runners, for instance)
+    # crashes pvbatch outright: NSOpenGLContext was removed in macOS 26. That is
+    # a SIGSEGV, not a Python exception, so it cannot be caught here.
+    #
+    # Writing the state first means such a crash still leaves a loadable .pvsm
+    # behind. Writing it again afterwards means a healthy machine gets the
+    # complete state, including the animation time range - if we only saved
+    # before the update, every platform would lose TimeKeeper.TimeRange and the
+    # timestep slider would not span the simulation when the file is opened in
+    # the ParaView GUI.
+    SaveState(state_file)
+    animation_scene.UpdateAnimationUsingDataTimeSteps()
+    SaveState(state_file)
 
-    # This avoid the error: Inconsistency detected by ld.so
+    # Works around a glibc dynamic linker failure on Linux:
+    #   "Inconsistency detected by ld.so"
     # See: https://discourse.paraview.org/t/inconsistency-detected-by-ld-so/3778
-    try:
-        Show(Cone())
-    except Exception:
-        pass
+    # Harmless elsewhere, and it runs after both SaveState calls, so it never
+    # affects the contents of the state file.
+    Show(Cone())
 
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':

@@ -17,6 +17,7 @@
 #include <memory>
 #include <sstream>
 
+#include "core/util/io.h"
 #include "core/visualization/paraview/adaptor.h"
 #include "core/visualization/paraview/helper.h"
 #include "core/visualization/paraview/vtk_agents.h"
@@ -259,20 +260,27 @@ void ParaviewAdaptor::GenerateParaviewState() {
              << sim->GetOutputDir() << "/" << kSimulationInfoJson;
   int ret_code = system(python_cmd.str().c_str());
   if (ret_code) {
-#ifdef __APPLE__
-    // On macOS, pvbatch may crash (SIGSEGV) on headless systems (e.g. CI)
-    // due to missing OpenGL context (NSOpenGLContext removed in macOS 26).
-    // The .pvsm state file may still have been saved before the crash.
-    Log::Warning("ParaviewAdaptor::GenerateParaviewState",
-                 "Error during generation of ParaView state "
-                 "(pvbatch exited with code ",
-                 ret_code, "). The .pvsm state file may be incomplete.\n",
+    // pvbatch can die part way through and still leave a usable state file:
+    // generate_pv_state.py writes the .pvsm before the render pass that crashes
+    // on headless macOS 26 (NSOpenGLContext was removed there). So judge the
+    // outcome by whether the state file exists, rather than by the platform we
+    // happen to be compiled for - a genuine ParaView failure must stay fatal
+    // everywhere, macOS included.
+    auto state_file =
+        Concat(sim->GetOutputDir(), "/", sim->GetUniqueName(), ".pvsm");
+    if (FileExists(state_file)) {
+      Log::Warning("ParaviewAdaptor::GenerateParaviewState",
+                   "pvbatch exited with code ", ret_code,
+                   " but wrote a ParaView state file. It may be incomplete: "
+                   "the animation time range is the most likely omission.\n",
+                   "Command\n", python_cmd.str());
+    } else {
+      Log::Fatal("ParaviewAdaptor::GenerateParaviewState",
+                 "Error during generation of ParaView state. pvbatch exited "
+                 "with code ",
+                 ret_code, " and wrote no state file to ", state_file, "\n",
                  "Command\n", python_cmd.str());
-#else
-    Log::Fatal("ParaviewAdaptor::GenerateParaviewState",
-               "Error during generation of ParaView state\n", "Command\n",
-               python_cmd.str());
-#endif
+    }
   }
 }
 
