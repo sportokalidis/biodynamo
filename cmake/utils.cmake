@@ -124,7 +124,19 @@ function(bdm_root_platform_apple out_tar out_key)
 
     # ROOT version shipped for each Xcode bucket, and the Xcode tag used in both
     # the tarball name and the digest key.
-    if("${XCODE_VERS}" VERSION_GREATER_EQUAL "26.0")
+    if("${XCODE_VERS}" VERSION_GREATER_EQUAL "26.6")
+        # ROOT's bundled cling parses the SDK's libc++ headers to build
+        # dictionaries, so it only works with an SDK close to the one it was
+        # compiled against. The Xcode 26.1 build below cannot parse the Xcode
+        # 26.6 SDK: genreflex dies with hundreds of errors inside libc++ and
+        # finally "Error loading the default header files". Hence a separate
+        # build per SDK generation rather than one build for all of 26.x.
+        #
+        # NOTE: like the 26.1 tarball, this one is labelled cxx17 but is in
+        # fact built with C++23 (root-config --features reports cxx23).
+        set(ROOT_VERS 6.40.04)
+        set(XCODE_TAG 26.6)
+    elseif("${XCODE_VERS}" VERSION_GREATER_EQUAL "26.0")
         # NOTE: this tarball is labelled cxx17 but is in fact built with C++23
         # (root-config --features reports cxx23). See verify_ROOT() below.
         set(ROOT_VERS 6.36.06)
@@ -243,6 +255,7 @@ function(fix_root_install_names ROOT_PREFIX)
     # library is not automatically a compatible one.
     set(BDM_ROOT_DEP_FIXES
         "/opt/local/lib/libxml2.2.dylib||/usr/lib/libxml2.2.dylib"
+        "/opt/local/lib/libcurl.4.dylib||/usr/lib/libcurl.4.dylib"
         "/opt/local/lib/libjpeg.8.dylib|jpeg-turbo|lib/libjpeg.8.dylib"
         "/opt/local/lib/libtiff.6.dylib|libtiff|lib/libtiff.6.dylib"
         "/opt/X11/lib/libpng16.16.dylib|libpng|lib/libpng16.16.dylib"
