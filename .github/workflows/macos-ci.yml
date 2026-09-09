@@ -14,36 +14,31 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [macos-26]
+        os: [macos-14, macos-15, macos-26]
 
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Install dependencies
-      run: |
-        export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-
-        # GHA macOS: unpin CMake to fix Homebrew conflict (actions/runner-images#12912)
-        brew uninstall --force cmake || true
-        # local/pinned tap does not exist on macOS-26 runners
-        if [[ "${{ matrix.os }}" != "macos-26" ]]; then
-          brew untap local/pinned || true
-        fi
-        brew install libomp open-mpi python@3.9 wget cmake ninja qt@5 libgit2
-        # macOS 26 needs explicit zlib and ncurses
-        if [[ "${{ matrix.os }}" == "macos-26" ]]; then
-          brew install zlib ncurses
-        fi
-
-
-        wget https://cmake.org/files/v3.24/cmake-3.24.1-macos-universal.tar.gz
-        tar -xzf cmake-3.24.1-macos-universal.tar.gz
-        sudo mv cmake-3.24.1-macos-universal/CMake.app /Applications/
-        sudo ln -sf /Applications/CMake.app/Contents/bin/cmake /usr/local/bin/cmake
+    # Checkout first: the dependency step reads the package list from the repo.
     - name: Checkout BioDynaMo
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - name: Install dependencies
+      run: |
+        export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+
+        # GHA macOS: unpin CMake to fix Homebrew conflict (actions/runner-images#12912).
+        # 'brew untap' on a tap that was never created is not an error we care
+        # about, so no need to special case runners that lack local/pinned.
+        brew uninstall --force cmake || true
+        brew untap local/pinned || true
+
+        # Install exactly what util/installation/osx expects, so that this
+        # workflow and a user following the prerequisites cannot drift apart.
+        # libgit2 is extra here because this job builds with -Dlibgit2=ON.
+        brew install $(cat util/installation/osx/package_list_required) libgit2
 
     # - name: Cache Third Party Packages
     #   uses: actions/cache@v4
