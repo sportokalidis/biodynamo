@@ -54,6 +54,7 @@
 #endif  // USE_LIBGIT2
 
 #include <TEnv.h>
+#include <TPluginManager.h>
 #include <TROOT.h>
 
 namespace bdm {
@@ -405,6 +406,7 @@ void Simulation::InitializeRuntimeParams(
     std::stringstream os;
     os << std::getenv("BDMSYS") << "/etc/bdm.rootrc";
     gEnv->ReadFile(os.str().c_str(), kEnvUser);
+    gPluginMgr->LoadHandlersFromPluginDirs("VisualizationAdaptor");
     read_env = true;
   }
 
