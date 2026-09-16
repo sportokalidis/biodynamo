@@ -73,26 +73,4 @@ jobs:
         root --version
         root -config
         bdm config
-        if [ "${{ matrix.os }}" == "macos-26" ]; then
-          # KNOWN LIMITATION, tracked, not silently dropped: on this runner
-          # (ROOT 6.40.04 built for Xcode 26.6) VisualizationAdaptor::Create
-          # fails to find the "paraview" plugin handler at runtime -
-          # ROOT logs "Unable to find plugin 'paraview'. This is most likely
-          # because bdm.rootrc was not read properly." - even though
-          # bdm.rootrc is read correctly. Two independent fix attempts both
-          # failed to change the outcome: an explicit
-          # gPluginMgr->LoadHandlersFromPluginDirs("VisualizationAdaptor")
-          # right after reading bdm.rootrc (still in
-          # Simulation::InitializeRuntimeParams, harmless, left in place),
-          # and a diagnostic that turned out to test the wrong process
-          # (an interactive `root` shell auto-runs build/rootlogon.C, which
-          # pre-warms this exact lookup before any -e code runs, so it
-          # can't be used to observe the compiled test binary's own
-          # behaviour). The cause is still open; this is not a fix.
-          #
-          # Every other macOS 26 test passes: this excludes exactly the 8
-          # affected by this one symptom, none of the surrounding 442.
-          ./bin/biodynamo-unit-tests --gtest_filter='-ParaviewAdaptorTest.CheckVisualizationSelection:FLAKY_ParaviewIntegrationTest.*'
-        else
-          ninja run-unit-tests
-        fi
+        ninja run-unit-tests
