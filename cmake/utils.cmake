@@ -79,8 +79,9 @@ endfunction()
 #
 # Both external/ROOT.cmake, which downloads the tarball, and verify_ROOT() below,
 # which validates an already-downloaded copy, MUST derive the digest key from
-# here. When they computed it independently they disagreed for Xcode point
-# releases that were not themselves package boundaries, so the cache check
+# here. When they computed it independently they disagreed for every Xcode point
+# release that was not itself a bucket boundary (e.g. Xcode 26.2 downloaded the
+# 26.1 build but looked up an 'osx-xcode-26.2-...' key), so the cache check
 # failed and ROOT was deleted and re-downloaded on every cmake run.
 function(bdm_root_platform out_tar out_key)
     if(APPLE)
@@ -126,14 +127,20 @@ function(bdm_root_platform_apple out_tar out_key)
     if("${XCODE_VERS}" VERSION_GREATER_EQUAL "26.6")
         # ROOT's bundled cling parses the SDK's libc++ headers to build
         # dictionaries, so it only works with an SDK close to the one it was
-        # compiled against. Use the package built for the Xcode 26.6 SDK.
-        # The tarball is labelled cxx17 but was built with C++23
-        # (root-config --features reports cxx23).
+        # compiled against. The Xcode 26.1 build below cannot parse the Xcode
+        # 26.6 SDK: genreflex dies with hundreds of errors inside libc++ and
+        # finally "Error loading the default header files". Hence a separate
+        # build per SDK generation rather than one build for all of 26.x.
+        #
+        # NOTE: like the 26.1 tarball, this one is labelled cxx17 but is in
+        # fact built with C++23 (root-config --features reports cxx23).
         set(ROOT_VERS 6.40.04)
         set(XCODE_TAG 26.6)
     elseif("${XCODE_VERS}" VERSION_GREATER_EQUAL "26.0")
-        message(FATAL_ERROR "This macOS 26 build currently requires Xcode 26.6 or newer. "
-            "Support for the Xcode 26.1 ROOT package is provided separately.")
+        # NOTE: this tarball is labelled cxx17 but is in fact built with C++23
+        # (root-config --features reports cxx23). See verify_ROOT() below.
+        set(ROOT_VERS 6.36.06)
+        set(XCODE_TAG 26.1)
     elseif("${XCODE_VERS}" VERSION_GREATER_EQUAL "16.4")
         set(ROOT_VERS 6.36.00)
         set(XCODE_TAG 16.4)
