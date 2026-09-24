@@ -16,50 +16,58 @@
 #include "core/util/string.h"
 #include "gtest/gtest.h"
 
-void HandleFlakyTests(int& failed_cnt, std::stringstream& filter) {
+// Count currently-failing tests, one by one (not by suite): a suite counts
+// as failed as soon as any test in it fails, so mixing suite- and test-level
+// counts (as an earlier version of this file did) can make the total go
+// negative and never return to zero, even after every test has passed.
+int CountFailedTests() {
+  auto unit_test = ::testing::UnitTest::GetInstance();
+  int failed_cnt = 0;
+  for (int i = 0; i < unit_test->total_test_suite_count(); ++i) {
+    const auto& test_case = *unit_test->GetTestSuite(i);
+    for (int j = 0; j < test_case.total_test_count(); ++j) {
+      if (test_case.GetTestInfo(j)->result()->Failed()) {
+        failed_cnt++;
+      }
+    }
+  }
+  return failed_cnt;
+}
+
+// Build a gtest filter selecting the currently-failing FLAKY_ tests.
+void HandleFlakyTests(std::stringstream& filter) {
   auto unit_test = ::testing::UnitTest::GetInstance();
   for (int i = 0; i < unit_test->total_test_suite_count(); ++i) {
     const auto& test_case = *unit_test->GetTestSuite(i);
     for (int j = 0; j < test_case.total_test_count(); ++j) {
       const auto& test_info = *test_case.GetTestInfo(j);
-      // process failed flaky test
       if (test_info.result()->Failed() &&
           bdm::StartsWith(test_case.name(), "FLAKY_")) {
-        failed_cnt--;
         filter << test_case.name() << "." << test_info.name() << ":";
       }
     }
   }
 }
 
-int RunAllTests() {
-  auto all_passed = RUN_ALL_TESTS();
-  if (all_passed == 0) {
-    return 0;
-  }
-  return ::testing::UnitTest::GetInstance()->failed_test_suite_count();
-}
-
 int main(int argc, char** argv) {
   ::testing::FLAGS_gtest_death_test_style = "threadsafe";
   ::testing::InitGoogleTest(&argc, argv);
-  auto failed_cnt = RunAllTests();
+  RUN_ALL_TESTS();
+  int failed_cnt = CountFailedTests();
 
   int repeat = 2;
   // Repeat failing flaky tests up to `repeat` times
   while (repeat-- > 0 && failed_cnt != 0) {
     std::stringstream filter;
-    HandleFlakyTests(failed_cnt, filter);
-    ::testing::GTEST_FLAG(filter) = filter.str().c_str();
+    HandleFlakyTests(filter);
     if (filter.str() == "") {
+      // Remaining failures are not flaky; nothing left to retry.
       break;
     }
+    ::testing::GTEST_FLAG(filter) = filter.str().c_str();
     std::cout << "Rerunning the following failed flaky test(s):" << std::endl;
-    auto failed_flaky_cnt = RunAllTests();
-    if (failed_flaky_cnt == 0) {
-      break;
-    }
-    failed_cnt += failed_flaky_cnt;
+    RUN_ALL_TESTS();
+    failed_cnt = CountFailedTests();
   }
   return failed_cnt;
 }
