@@ -31,7 +31,6 @@ jobs:
         BDM_PYTHON_VERSION=3.9.1
         if [ -f "util/installation/${{ matrix.os }}/environment.sh" ]; then
           . "util/installation/${{ matrix.os }}/environment.sh"
-          printf '%s\n' "CC=$CC" "CXX=$CXX" "OMPI_CC=$OMPI_CC" "OMPI_CXX=$OMPI_CXX" >> "$GITHUB_ENV"
         fi
         echo "BDM_PYTHON_VERSION=$BDM_PYTHON_VERSION" >> "$GITHUB_ENV"
 

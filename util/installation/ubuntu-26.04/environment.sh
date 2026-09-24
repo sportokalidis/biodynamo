@@ -15,9 +15,9 @@
 
 # Keep the Python 3.9 ABI used by ROOT and ParaView, with OpenSSL 3 support.
 export BDM_PYTHON_VERSION=3.9.25
-# ROOT's interpreter also needs the GCC 11 headers used to build the archive.
-export CC="${CC:-gcc-11}"
-export CXX="${CXX:-g++-11}"
-# OpenMPI wrappers otherwise use Ubuntu's default compiler.
-export OMPI_CC="${OMPI_CC:-$CC}"
-export OMPI_CXX="${OMPI_CXX:-$CXX}"
+# BioDynaMo itself builds with the platform's default compiler, same as on
+# Ubuntu 22.04/24.04. gcc-11 only needs to be installed on disk (see
+# package_list_required) so that ROOT's Cling interpreter finds the matching
+# headers it was built against; forcing CC/CXX to gcc-11 here would compile
+# BioDynaMo itself with an older libstdc++ ABI than the reused ROOT/ParaView
+# archives require, breaking the final link.

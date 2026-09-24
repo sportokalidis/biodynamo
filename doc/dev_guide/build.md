@@ -78,12 +78,14 @@ source build/bin/thisbdm.sh
 cmake --build build --target run-unit-tests
 ```
 
-The environment selects GCC 11, including for OpenMPI, to match the existing
-ROOT interpreter headers. Python 3.9.25 retains the libraries' Python 3.9 ABI
-and supports the system OpenSSL 3. Moving to a newer Python minor version requires
-rebuilding the third-party libraries. CMake 3.31.10 is installed inside pyenv
-because bundled dependencies still require compatibility removed in CMake 4.
-Always activate this environment before configuring or rebuilding.
+BioDynaMo itself still builds with the platform's default compiler, same as on
+Ubuntu 22.04/24.04; gcc-11 is installed (see prerequisites) only so ROOT's
+Cling interpreter finds the matching headers it was built against. Python
+3.9.25 retains the libraries' Python 3.9 ABI and supports the system OpenSSL 3.
+Moving to a newer Python minor version requires rebuilding the third-party
+libraries. CMake 3.31.10 is installed inside pyenv because bundled dependencies
+still require compatibility removed in CMake 4. Always activate this
+environment before configuring or rebuilding.
 
 `./install.sh` activates the same environment automatically and installs to
 `$HOME/biodynamo-v<version>`. Use a fresh build directory when changing Ubuntu
