@@ -1,10 +1,13 @@
 # Runs the installation tests and valgrind tests in the following cases:
 #   1) every day at 3 am
 #   2) a pull request to the master branch
+#   3) a push or manual dispatch
 
 name: Ubuntu System CI
 
 on:
+  push:
+  workflow_dispatch:
   schedule:
     # Every day at 3 am
     - cron: '0 3 * * *'
@@ -20,27 +23,33 @@ concurrency:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-26.04]
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Set GHA_BRANCH_NAME
-      run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          echo "GHA_BRANCH_NAME=${{ github.head_ref }}" >> $GITHUB_ENV
-        fi
-        if [ "${{ github.event_name }}" = "schedule" ]; then
-          echo "GHA_BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
-        fi
+    - name: Checkout BioDynaMo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-        echo "GHA_REPOSITORY=${{ github.event.pull_request.head.repo.full_name || github.repository }}" >> $GITHUB_ENV
-
-    - name: Set OSVERS
+    - name: Select build environment
       run: |
-        ID=$(grep -oP '(?<=^ID=).+' /etc/os-release | tr -d '"')
-        VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
-        echo "OSVERS=$ID-$VERSION" >> $GITHUB_ENV
+        echo "OSVERS=${{ matrix.os }}" >> "$GITHUB_ENV"
+        BDM_PYTHON_VERSION=3.9.1
+        if [ -f "util/installation/${{ matrix.os }}/environment.sh" ]; then
+          . "util/installation/${{ matrix.os }}/environment.sh"
+          printf '%s\n' "CC=$CC" "CXX=$CXX" "OMPI_CC=$OMPI_CC" "OMPI_CXX=$OMPI_CXX" >> "$GITHUB_ENV"
+        fi
+        echo "BDM_PYTHON_VERSION=$BDM_PYTHON_VERSION" >> "$GITHUB_ENV"
+
+    - name: Cache pyenv
+      uses: actions/cache@v4
+      id: pyenv-cache
+      with:
+        path: ~/.pyenv
+        key: ${{ matrix.os }}-${{ runner.arch }}-pyenv-${{ env.BDM_PYTHON_VERSION }}-${{ hashFiles('util/installation/ubuntu-26.04/*') }}
 
     - name: Start Xvfb
       run: |
@@ -52,72 +61,24 @@ jobs:
         disown -ar
         sleep 3
 
-    - name: Install BioDynaMo
+    - name: Install BioDynaMo from the checked-out revision
       shell: bash
       run: |
-        sudo apt update
-        sudo apt install -y curl
-        curl https://raw.githubusercontent.com/${GHA_REPOSITORY}/${GHA_BRANCH_NAME}/util/install | bash
-        # remove whole bidynamo repository to catch errors related to paths pointing into the build dir
-        mktemp -d
-        find /tmp -iname biodynamo -type d || true
-        rm -rf $(find $(mktemp -d)/../* -maxdepth 1 -iname biodynamo -type d 2>/dev/null)
-        echo "Removed"
-        find /tmp -iname biodynamo -type d || true
-
-    - name: Checkout BioDynaMo
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Set INSTALL_DIR
-      run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          echo "INSTALL_DIR=${GITHUB_WORKSPACE}/build" >> $GITHUB_ENV
-        fi
-        if [ "${{ github.event_name }}" = "schedule" ]; then
-          echo "INSTALL_DIR=$(echo ${HOME}/biodynamo-*)" >> $GITHUB_ENV
-        fi
-
-    - name: Cache pyenv
-      uses: actions/cache@v4
-      id: pyenv-cache
-      with:
-        path: ~/.pyenv
-        key: ${{ env.OSVERS }}-pyenv-3.9.1
-
-    - name: Install pyenv dependency
-      if: steps.pyenv-cache.outputs.cache-hit != 'true'
-      run: |
-        if [ ! -f "$HOME/.pyenv/bin/pyenv" ]; then
-          curl https://pyenv.run | bash
-        fi
-        export PATH="$HOME/.pyenv/bin:$PATH"
-        eval "$(pyenv init --path)"
-        eval "$(pyenv init -)"
-        if [ ! -f  "$HOME/.pyenv/versions/3.9.1/lib/libpython3.so" ]; then
-          PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.9.1
-        fi
-        pyenv shell 3.9.1
+        # A separate clone tests the installer and lets us remove its build tree.
+        # Use the checked-out commit, including the PR merge commit on forks.
+        install_source=$(mktemp -d "$RUNNER_TEMP/bdm-install.XXXXXX")
+        trap 'rm -rf "$install_source"' EXIT
+        git clone --no-hardlinks . "$install_source/biodynamo"
+        cd "$install_source/biodynamo"
+        SILENT_INSTALL=1 BDM_CMAKE_FLAGS="-Dtest=off -Dnotebooks=off -Dsbml=off" ./install.sh
+        version=$(cat build/version/bdm_shortversion)
+        echo "INSTALL_DIR=$HOME/biodynamo-v$version" >> "$GITHUB_ENV"
 
     - name: Cache Third Party Packages
       uses: actions/cache@v4
       with:
         path: build/third_party
         key: ${{ env.OSVERS }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
-
-    # Set floating point precision
-    - name: Set floating-point-precision
-      run: |
-        if [ "${{ env.OSVERS }}" = "ubuntu-20.04" ]; then
-          echo "REALT=float" >> $GITHUB_ENV
-        fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-22.04" ]; then
-          echo "REALT=double" >> $GITHUB_ENV
-        fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
-          echo "REALT=double" >> $GITHUB_ENV
-        fi
 
     # Don't do this in the `Build BioDynaMo step`, because notebooks might time out in GHA
     # runners, while waiting for other targets to be compiled. Run notebooks only
@@ -128,13 +89,13 @@ jobs:
         export PATH="$HOME/.pyenv/bin:$PATH"
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
-        pyenv shell 3.9.1
+        pyenv shell "$BDM_PYTHON_VERSION"
         cmake \
           -Dnotebooks=ON \
           -Dsbml=OFF \
           -Dnuma=OFF \
           -DCMAKE_BUILD_TYPE=Release \
-          -Dreal_t=${{ env.REALT }} \
+          -Dreal_t=double \
           -B build
         cmake --build build --parallel --config Release --target notebooks  -- -j1
       if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-22.04'
@@ -146,7 +107,8 @@ jobs:
         export PATH="$HOME/.pyenv/bin:$PATH"
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
-        pyenv shell 3.9.1
+        pyenv shell "$BDM_PYTHON_VERSION"
+        cmake -P test/cmake/ubuntu-platforms.cmake
         cmake \
           -Dnotebooks=OFF \
           -Dparaview=ON \
@@ -154,7 +116,7 @@ jobs:
           -Dlibgit2=ON \
           -Dsbml=OFF \
           -DCMAKE_BUILD_TYPE=Release \
-          -Dreal_t=${{ env.REALT }} \
+          -Dreal_t=double \
           -B build
         cmake --build build --config Release
 
@@ -162,7 +124,7 @@ jobs:
       shell: bash
       working-directory: build
       run: |
-        . $INSTALL_DIR/bin/thisbdm.sh
+        . "$INSTALL_DIR/bin/thisbdm.sh"
         sudo git config --system user.name "Test User"
         sudo git config --system user.email user@test.com
         export DISPLAY=:99.0

@@ -2,6 +2,7 @@ name: Ubuntu CI
 
 on:
   push:
+  workflow_dispatch:
   pull_request:
     branches:
       - master
@@ -13,28 +14,44 @@ concurrency:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-26.04]
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Set python openssl package
+    - name: Checkout BioDynaMo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Select build environment
       run: |
-        if [ "${{ env.OSVERS }}" = "ubuntu-20.04" ]; then
-          echo "PYOPENSSL=python-openssl" >> $GITHUB_ENV
+        echo "OSVERS=${{ matrix.os }}" >> "$GITHUB_ENV"
+        BDM_PYTHON_VERSION=3.9.1
+        if [ -f "util/installation/${{ matrix.os }}/environment.sh" ]; then
+          . "util/installation/${{ matrix.os }}/environment.sh"
+          printf '%s\n' "CC=$CC" "CXX=$CXX" "OMPI_CC=$OMPI_CC" "OMPI_CXX=$OMPI_CXX" >> "$GITHUB_ENV"
         fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-22.04" ]; then
-          echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
-        fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
-          echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
-        fi
-        
+        echo "BDM_PYTHON_VERSION=$BDM_PYTHON_VERSION" >> "$GITHUB_ENV"
+
+    - name: Cache pyenv
+      uses: actions/cache@v4
+      id: pyenv-cache
+      with:
+        path: ~/.pyenv
+        key: ${{ matrix.os }}-${{ runner.arch }}-pyenv-${{ env.BDM_PYTHON_VERSION }}-${{ hashFiles('util/installation/ubuntu-26.04/*') }}
+
+    - name: Install Ubuntu 26.04 prerequisites
+      if: matrix.os == 'ubuntu-26.04'
+      run: SILENT_INSTALL=1 ./prerequisites.sh required
+
     - name: Install dependencies
+      if: matrix.os != 'ubuntu-26.04'
       run: |
         sudo apt-get update
         sudo apt-get install -y libopenmpi-dev gcc-11 g++-11 libomp5 libomp-dev libnuma-dev freeglut3-dev \
-          libreadline-dev libsqlite3-dev tk-dev ${{ env.PYOPENSSL }} ninja-build libblas-dev liblapack-dev libgit2-dev \
+          libreadline-dev libsqlite3-dev tk-dev python3-openssl ninja-build libblas-dev liblapack-dev libgit2-dev \
           libboost-dev
         curl -L -O https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh
         chmod +x cmake-3.19.3-Linux-x86_64.sh
@@ -49,21 +66,8 @@ jobs:
         disown -ar
         sleep 3
 
-    - name: Set OSVERS
-      run: |
-        ID=$(grep -oP '(?<=^ID=).+' /etc/os-release | tr -d '"')
-        VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
-        echo "OSVERS=$ID-$VERSION" >> $GITHUB_ENV
-
-    - name: Cache pyenv
-      uses: actions/cache@v4
-      id: pyenv-cache
-      with:
-        path: ~/.pyenv
-        key: ${{ env.OSVERS }}-pyenv-3.9.1
-
     - name: Install pyenv dependency
-      if: steps.pyenv-cache.outputs.cache-hit != 'true'
+      if: matrix.os != 'ubuntu-26.04' && steps.pyenv-cache.outputs.cache-hit != 'true'
       run: |
         if [ ! -f "$HOME/.pyenv/bin/pyenv" ]; then
           curl https://pyenv.run | bash
@@ -72,12 +76,7 @@ jobs:
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
         PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.9.1
-        pyenv shell 3.9.1
-
-    - name: Checkout BioDynaMo
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+        pyenv shell "$BDM_PYTHON_VERSION"
 
     - name: Cache Third Party Packages
       uses: actions/cache@v4
@@ -91,7 +90,8 @@ jobs:
         export PATH="$HOME/.pyenv/bin:$PATH"
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
-        pyenv shell 3.9.1
+        pyenv shell "$BDM_PYTHON_VERSION"
+        cmake -P test/cmake/ubuntu-platforms.cmake
         cmake -G Ninja \
           -Dparaview=ON \
           -Dbenchmark=ON \
@@ -115,10 +115,7 @@ jobs:
         export PATH="$HOME/.pyenv/bin:$PATH"
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
-        pyenv shell 3.9.1
-        wget https://apt.llvm.org/llvm-snapshot.gpg.key
-        sudo apt-key add llvm-snapshot.gpg.key
-        sudo add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main"
+        pyenv shell "$BDM_PYTHON_VERSION"
         sudo apt update
         sudo apt install -y cloc clang-tidy clang-format
         cloc --exclude-dir=build .
