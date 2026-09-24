@@ -44,6 +44,16 @@ jobs:
         fi
         echo "BDM_PYTHON_VERSION=$BDM_PYTHON_VERSION" >> "$GITHUB_ENV"
 
+    - name: Set GHA_BRANCH_NAME
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "GHA_BRANCH_NAME=${{ github.head_ref }}" >> $GITHUB_ENV
+        else
+          echo "GHA_BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+        fi
+
+        echo "GHA_REPOSITORY=${{ github.event.pull_request.head.repo.full_name || github.repository }}" >> $GITHUB_ENV
+
     - name: Cache pyenv
       uses: actions/cache@v4
       id: pyenv-cache
@@ -61,18 +71,26 @@ jobs:
         disown -ar
         sleep 3
 
-    - name: Install BioDynaMo from the checked-out revision
+    - name: Install BioDynaMo
       shell: bash
       run: |
-        # A separate clone tests the installer and lets us remove its build tree.
-        # Use the checked-out commit, including the PR merge commit on forks.
-        install_source=$(mktemp -d "$RUNNER_TEMP/bdm-install.XXXXXX")
-        trap 'rm -rf "$install_source"' EXIT
-        git clone --no-hardlinks . "$install_source/biodynamo"
-        cd "$install_source/biodynamo"
-        SILENT_INSTALL=1 BDM_CMAKE_FLAGS="-Dtest=off -Dnotebooks=off -Dsbml=off" ./install.sh
-        version=$(cat build/version/bdm_shortversion)
-        echo "INSTALL_DIR=$HOME/biodynamo-v$version" >> "$GITHUB_ENV"
+        sudo apt update
+        sudo apt install -y curl
+        curl https://raw.githubusercontent.com/${GHA_REPOSITORY}/${GHA_BRANCH_NAME}/util/install | bash
+        # remove whole bidynamo repository to catch errors related to paths pointing into the build dir
+        mktemp -d
+        find /tmp -iname biodynamo -type d || true
+        rm -rf $(find $(mktemp -d)/../* -maxdepth 1 -iname biodynamo -type d 2>/dev/null)
+        echo "Removed"
+        find /tmp -iname biodynamo -type d || true
+
+    - name: Set INSTALL_DIR
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "INSTALL_DIR=${GITHUB_WORKSPACE}/build" >> $GITHUB_ENV
+        else
+          echo "INSTALL_DIR=$(echo ${HOME}/biodynamo-*)" >> $GITHUB_ENV
+        fi
 
     - name: Cache Third Party Packages
       uses: actions/cache@v4

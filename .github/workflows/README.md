@@ -6,9 +6,9 @@ runs nightly. Matrix jobs do not cancel each other when one platform fails.
 
 Ubuntu 26.04 currently tests the Ubuntu 24.04 binary archives with GCC 11,
 Python 3.9.25 and CMake 3.31.10. Its prerequisite installer is shared with local
-installation. System CI installs the exact checked-out revision in a temporary
-clone, removes that clone, then tests the installed distribution as well as the
-build-tree demos and Valgrind targets. This also works for fork branches.
+installation. System CI installs the pushed branch via the public installer,
+then tests the installed distribution as well as the build-tree demos and
+Valgrind targets. This also works for fork branches.
 
 After pushing the branch, check **both workflows** in the fork's Actions tab.
 Check dependency installation, configure/build, unit tests, installed simulation,
