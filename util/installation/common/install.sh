@@ -51,8 +51,6 @@ if [ $BDM_OS = "centos-7" ]; then
   module load mpi
 fi
 
-set -e
-
 if [ "$BDM_OS" != "osx" ]; then
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
@@ -63,6 +61,7 @@ if [ "$BDM_OS" != "osx" ]; then
   fi
   pyenv shell "${BDM_PYTHON_VERSION:-3.9.1}"
 fi
+set -e
 
 # Test overriding the OS detection for one OS
 if [ "${BDM_OS}" = "ubuntu-18.04" ]; then
