@@ -15,7 +15,11 @@
 #include "unit/core/container/inline_vector_test.h"
 #include <new>
 
-size_t operator_new_calls_ = 0;
+// volatile: GCC's alias analysis assumes operator new[] cannot modify
+// unrelated globals (even a user-replaced one), and otherwise
+// constant-propagates reads of this counter across the call, making the
+// count of new/delete pairs it elides at -O1+ appear as 0.
+volatile size_t operator_new_calls_ = 0;
 
 /// overload new[] operator to test how often heap memory is allocated
 void* operator new[](std::size_t sz) {
