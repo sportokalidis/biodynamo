@@ -15,7 +15,10 @@
 
 BDM_PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 
+# Quiet mode hides diagnostics from large Git pack mappings, while memory errors
+# are still reported and fail CI through --error-exitcode=1.
 valgrind \
+  --quiet \
   --track-origins=yes \
   --num-callers=50 \
   --leak-resolution=high \
