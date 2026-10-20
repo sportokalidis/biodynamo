@@ -110,12 +110,20 @@ install(TARGETS biodynamo
         DESTINATION ${DIRNAME}/lib)
 
 if(test)
+  if(dict)
     install(TARGETS biodynamo-unit-tests
             LIBRARY
             DESTINATION ${DIRNAME}/lib)
     install(TARGETS biodynamo-unit-tests-bin
             RUNTIME
             DESTINATION ${DIRNAME}/bin)
+  else()
+    # Without dictionaries bdm_add_executable creates one executable, not a
+    # shared library and a separate -bin launcher.
+    install(TARGETS biodynamo-unit-tests
+            RUNTIME
+            DESTINATION ${DIRNAME}/bin)
+  endif()
 endif()
 
 if (notebooks)

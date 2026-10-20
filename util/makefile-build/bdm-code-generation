@@ -54,11 +54,15 @@ HEADERS=$@
 
 SELECTIONFILE=$(${BDM_CONFIG} --cmakedir)/selection.xml
 
-CXX_INCLUDES=$(${BDM_CONFIG} --cxxincludes | sed 's|-isystem |-I|g')
+CXX_INCLUDES=$(${BDM_CONFIG} --cxxincludes) || exit 1
+CXX_INCLUDES=$(printf '%s\n' "$CXX_INCLUDES" | sed 's|-isystem |-I|g')
 
 CXX_DEFINES=$(${BDM_CONFIG} --cxxdefines)
 
-genreflex ${HEADERS} -o ${DICT} --noIncludePaths --select=${SELECTIONFILE} ${CXX_DEFINES} ${CXX_INCLUDES} $ADDITIONAL_CXX_FLAGS
+ROOT_PREFIX=$(root-config --prefix) || exit 1
+# --cxxincludes above validates the selected ROOT language mode. genreflex
+# uses that built-in mode and does not accept a compiler -std= option.
+"${ROOT_PREFIX}/bin/genreflex" ${HEADERS} -o ${DICT} --noIncludePaths --select=${SELECTIONFILE} ${CXX_DEFINES} ${CXX_INCLUDES} $ADDITIONAL_CXX_FLAGS || exit 1
 
 # Generate bdm dictionary and append to DICT
 BDM_DICT=$(mktemp)

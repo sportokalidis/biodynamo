@@ -7,9 +7,15 @@
 SCRIPTPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export BDM_THISBDM_SILENT=true
 
+# Build commands must use the ROOT installation selected by CMake, even when
+# the caller previously sourced another ROOT or selected a replacement archive.
+export ROOTSYS="@ROOTSYS@"
+export BDM_ROOT_DIR="$ROOTSYS"
+export BDM_CUSTOM_ROOT=true
+
 # We redirect to /dev/null to ignore the success message when we want to
 # extract output in CMake (e.g. in Installation.cmake we want to obtain the
 # version number).
-source @CMAKE_INSTALL_ROOT@/bin/thisbdm.sh
+source "@CMAKE_INSTALL_ROOT@/bin/thisbdm.sh" || exit 1
 
-$@
+exec "$@"
