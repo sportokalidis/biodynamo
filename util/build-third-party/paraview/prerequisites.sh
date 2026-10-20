@@ -73,9 +73,9 @@ if [ -z "$SKIP_PACKAGE_MAN" ]; then
     fi
 
     # update cmake
-    URL="https://cmake.org/files/v3.19/cmake-3.19.3-Linux-x86_64.tar.gz"
-    DownloadTarAndExtract $URL $WORKING_DIR/cmake-3.19.3 1
-    export PATH=$WORKING_DIR/cmake-3.19.3/bin:$PATH
+    URL="https://cmake.org/files/v3.31/cmake-3.31.10-linux-x86_64.tar.gz"
+    DownloadTarAndExtract $URL $WORKING_DIR/cmake-3.31.10 1
+    export PATH=$WORKING_DIR/cmake-3.31.10/bin:$PATH
 
     # pyenv
     if [ -z "$SKIP_PYENV" ]; then
