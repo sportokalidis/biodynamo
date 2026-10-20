@@ -12,7 +12,7 @@
 #
 # -----------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.19.3 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.24 FATAL_ERROR)
 
 set(policy_new CMP0072 CMP0077)
 foreach(policy ${policy_new})
@@ -97,6 +97,10 @@ endif(APPLE)
 
 # Find a suitable compiler
 include(CheckCompiler)
+include(CompilerStandard)
+
+set(BDM_ROOT_URL "" CACHE STRING "Optional ROOT archive URL")
+set(BDM_ROOT_SHA256 "" CACHE STRING "SHA256 of BDM_ROOT_URL")
 
 # Specify some directories which will be used to structure BioDynaMo build.
 set(CMAKE_BIODYNAMO_BUILD_ROOT  "${CMAKE_BINARY_DIR}")
@@ -188,6 +192,38 @@ else()
   message(STATUS "Using default real_t (double)")
   set(BDM_CONFIG_REALT "float")
 endif()
+
+# Find ROOT and check its installation
+if(BDM_ROOT_URL OR BDM_ROOT_SHA256)
+  # An explicitly selected archive takes precedence over an older ROOT in the
+  # caller's environment. Validate the pair before changing the cached path.
+  bdm_root_download(BDM_SELECTED_ROOT_URL BDM_SELECTED_ROOT_SHA)
+  set(ROOT_CONFIG_EXECUTABLE "${CMAKE_THIRD_PARTY_DIR}/root/bin/root-config"
+    CACHE FILEPATH "ROOT configuration executable" FORCE)
+  if(EXISTS "${ROOT_CONFIG_EXECUTABLE}")
+    find_package(ROOT COMPONENTS Geom Gui GenVector)
+  else()
+    set(ROOT_FOUND FALSE)
+  endif()
+else()
+  find_package(ROOT COMPONENTS Geom Gui GenVector)
+endif()
+verify_ROOT()
+
+# The language mode follows the selected ROOT package: ROOT publishes C++17 and
+# C++23 builds per platform and its interpreter must parse the same headers the
+# libraries were compiled from. Apply it here, at directory scope, before any
+# target is created, then confirm the reported __cplusplus values agree.
+bdm_apply_cxx_standard(${ROOT_CXX_STANDARD})
+bdm_check_root_cplusplus_macro()
+
+# Repair MacPorts/XQuartz library paths in downloaded ROOT, including cached copies.
+if(APPLE AND ROOT_FOUND AND ROOT_INCLUDE_DIRS)
+  list(GET ROOT_INCLUDE_DIRS 0 BDM_ROOT_INCLUDE_DIR)
+  string(REGEX REPLACE "/include$" "" BDM_ROOT_PREFIX "${BDM_ROOT_INCLUDE_DIR}")
+  fix_root_install_names("${BDM_ROOT_PREFIX}")
+endif()
+
 
 # -------------------- find packages ------------------------------------------
 if(boost)
@@ -340,17 +376,6 @@ endif()
 
 # Check if we have git installed
 find_package(Git)
-
-# Find ROOT and check its installation
-find_package(ROOT COMPONENTS Geom Gui GenVector)
-verify_ROOT()
-
-# Repair MacPorts/XQuartz library paths in downloaded ROOT, including cached copies.
-if(APPLE AND ROOT_FOUND AND ROOT_INCLUDE_DIRS)
-  list(GET ROOT_INCLUDE_DIRS 0 BDM_ROOT_INCLUDE_DIR)
-  string(REGEX REPLACE "/include$" "" BDM_ROOT_PREFIX "${BDM_ROOT_INCLUDE_DIR}")
-  fix_root_install_names("${BDM_ROOT_PREFIX}")
-endif()
 
 if (dict)
   add_definitions("-DUSE_DICT")
@@ -524,7 +549,8 @@ if(APPLE)
     optim
     URL "${CMAKE_SOURCE_DIR}/third_party/optim-18ae71.zip"
     BINARY_DIR "optim-prefix/src/optim"
-    CONFIGURE_COMMAND ./configure -o "-O3 -ffp-contract=fast -flto -DARMA_NO_DEBUG"
+    CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CXX=${CMAKE_CXX_COMPILER}" ./configure -o "-O3 -ffp-contract=fast -flto -DARMA_NO_DEBUG"
+    BUILD_COMMAND make "CXX_STD=${BDM_CXX_STANDARD_COMPILE_OPTION}"
     INSTALL_COMMAND cp ${CMAKE_CURRENT_BINARY_DIR}/optim-prefix/src/optim/${OPTIM_LIBNAME} ${CMAKE_INSTALL_LIBDIR}
   )
 else()
@@ -532,7 +558,8 @@ else()
     optim
     URL "${CMAKE_SOURCE_DIR}/third_party/optim-18ae71.zip"
     BINARY_DIR "optim-prefix/src/optim"
-    CONFIGURE_COMMAND ./configure -p -o "-O3 -march=native -ffp-contract=fast -flto -DARMA_NO_DEBUG -DOPTIM_USE_OMP"
+    CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CXX=${CMAKE_CXX_COMPILER}" ./configure -p -o "-O3 -march=native -ffp-contract=fast -flto -DARMA_NO_DEBUG -DOPTIM_USE_OMP"
+    BUILD_COMMAND make "CXX_STD=${BDM_CXX_STANDARD_COMPILE_OPTION}"
     INSTALL_COMMAND cp ${CMAKE_CURRENT_BINARY_DIR}/optim-prefix/src/optim/${OPTIM_LIBNAME} ${CMAKE_INSTALL_LIBDIR}
   )
 endif()
@@ -685,12 +712,15 @@ if (CUDA_FOUND)
     CUDA_SELECT_NVCC_ARCH_FLAGS(NVCC_FLAGS_EXTRA $ENV{TORCH_CUDA_ARCH_LIST})
     list(APPEND CUDA_NVCC_FLAGS ${NVCC_FLAGS_EXTRA})
 
-    set(CUDA_HOST_COMPILER "/usr/bin/")
+    set(CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}")
     set(NVCCFLAGS "--compiler-bindir ${CUDA_HOST_COMPILER}")
     if(CMAKE_BUILD_TYPE MATCHES "Debug")
       message("CUDA Debug mode")
       set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -g -G -O0" )
     endif()
+    # CUDA translation units do not include ROOT. Keep their existing C++17
+    # mode; the host library and ROOT dictionaries use C++23. This boundary
+    # needs GPU runtime validation with the selected CUDA/host compiler pair.
     set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++17")
 
     target_link_libraries(biodynamo ${CUDA_LIBRARIES})

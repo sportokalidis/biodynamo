@@ -63,6 +63,7 @@ endfunction(get_implicit_dependencies)
 #        STATIC libraries not compiled with -fPIC must be linked in a separate command using
 #        target_link_libraries(${TARGET} static-lib-wo-fpic)
 function(bdm_add_executable TARGET)
+  include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/CompilerStandard.cmake")
   cmake_parse_arguments(ARG "" "" "SOURCES;HEADERS;LIBRARIES" ${ARGN} )
 
   if(dict)
@@ -103,6 +104,7 @@ endfunction(bdm_add_executable)
 # build shared library with ROOT dictionaries. If ARG_PLUGIN is set, we will
 # always generate dictionaries (as required by ROOT's plugin manager)
 function(build_shared_library TARGET)
+  include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/CompilerStandard.cmake")
   cmake_parse_arguments(ARG "" "" "SELECTION;SOURCES;HEADERS;LIBRARIES;PLUGIN" ${ARGN} )
 
   # We always need dictionaries for the plugins (plugin manager requires class
@@ -148,6 +150,7 @@ function(build_shared_library TARGET)
     add_library(${TARGET} SHARED ${ARG_SOURCES})
     target_link_libraries(${TARGET} ${ARG_LIBRARIES})
   endif()
+  target_compile_features(${TARGET} PUBLIC cxx_std_${BDM_CXX_STANDARD})
 endfunction(build_shared_library)
 
 # function generate_rootlogon

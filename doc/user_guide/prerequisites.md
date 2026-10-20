@@ -24,6 +24,12 @@ keywords:
 This page lists the prerequisite packages that need to be installed in order to build correctly BioDynaMo.
 BioDynaMo provides also an automated procedure to install all the needed libraries.
 
+The C++23 migration branch requires CMake 3.24 or newer, a compiler with C++23
+mode, and ROOT 6.36 or newer built with C++23. Linux and older Xcode packages
+still need replacement artifacts; use an external C++23 ROOT installation until
+those are registered. See the [migration build instructions](/docs/devguide/build/).
+The legacy CentOS instructions below do not provide a validated C++23 toolchain.
+
 ## Ubuntu 20.04, 22.04 and 24.04
 
 ### Required Packages
@@ -78,9 +84,9 @@ sudo apt-get install -y wget curl make gcc g++ \
 libblas-dev liblapack-dev libopenmpi-dev libomp5 libomp-dev \ 
 libnuma-dev freeglut3-dev libpthread-stubs0-dev
 
-curl -L -O https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh
-chmod +x cmake-3.19.3-Linux-x86_64.sh
-sudo ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix=/usr/local
+curl -L -O https://github.com/Kitware/CMake/releases/download/v3.31.10/cmake-3.31.10-linux-x86_64.sh
+chmod +x cmake-3.31.10-linux-x86_64.sh
+sudo ./cmake-3.31.10-linux-x86_64.sh --skip-license --prefix=/usr/local
 ```
 
 We install pyenv as the Python Version Management tool to be able to switch
@@ -238,10 +244,12 @@ limitations that come from the prebuilt ROOT package we distribute:
    work; use SVG or PDF instead, which are unaffected. CMake prints a warning
    naming each affected library at configure time.
 
-You will also see the warning `The C++ standard in this build does not match
-ROOT configuration` repeated during the build. It is expected on macOS 26 and
-harmless: BioDynaMo is a C++17 project, the ROOT package for Xcode 26 happens to
-be built with C++23, and that combination is tested.
+On the C++23 migration branch, BioDynaMo requires CMake 3.24 or newer and
+ROOT 6.36 or newer built with C++23. A different ROOT language mode is a
+configuration error. The existing Xcode 26 packages already use C++23, despite
+their historical `cxx17` archive names. Linux and older Xcode packages still need
+replacement artifacts; until those are registered, use an external C++23 ROOT
+installation. See the [migration build instructions](/docs/devguide/build/).
 
 ### Required Packages
 
