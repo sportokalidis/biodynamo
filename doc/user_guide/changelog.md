@@ -18,6 +18,25 @@ keywords:
   -track
   -tracking
 ---
+## Unreleased — C++ standard follows the ROOT package
+
+- Derive BioDynaMo's C++ standard from the selected ROOT package instead of
+  pinning one. ROOT supports C++17/20/23 from one source tree and publishes
+  different standards per platform, and its interpreter must parse the same
+  headers the libraries were compiled from. C++17 and C++23 are supported and
+  tested; other modes are rejected with an actionable message.
+- Require ROOT and the compiler to report the same `__cplusplus` value, so
+  ROOT's headers no longer warn on every translation unit. For C++23 use GCC 14
+  or newer, or Clang 17 or newer; GCC 13 reports the provisional C++23 value.
+- Require CMake 3.24+, ROOT 6.22+, and ROOT 6.36+ for a C++23 package.
+- Reject conflicting simulation compiler settings, and publish the built
+  standard to consumers through the use-file and `bdm-config --cxx-standard`.
+- Align dictionaries, simulation templates, and external C++ builds with the
+  selected standard.
+- Add a ROOT source-packaging recipe and checksum-pinned archive overrides.
+- Rebuild existing simulations, plugins, and dictionaries in fresh directories
+  when the selected ROOT package changes its language mode.
+
 ## 17.11.2020 [`PR-#138`](https://github.com/BioDynaMo/biodynamo/pull/140)
 
 -   Disable scheduling of default operations with the new parameter: `Param::unschedule_default_operations`.
