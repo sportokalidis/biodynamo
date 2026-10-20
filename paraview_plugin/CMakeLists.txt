@@ -1,5 +1,6 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.24)
 project(BDMGlyphFilter)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/CompilerStandard.cmake")
 
 include(GNUInstallDirs)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

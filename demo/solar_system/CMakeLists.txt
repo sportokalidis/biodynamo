@@ -11,11 +11,11 @@
 # regarding copyright ownership.
 #
 # -----------------------------------------------------------------------------
-cmake_minimum_required(VERSION 3.19.3)
+cmake_minimum_required(VERSION 3.24)
 project(solar_system)
 
-# BioDynaMo curretly uses the C++14 standard.
-set(CMAKE_CXX_STANDARD 14)
+# BioDynaMo currently uses the C++23 standard.
+set(CMAKE_CXX_STANDARD 23)
 
 # Use BioDynaMo in this project.
 find_package(BioDynaMo REQUIRED)
