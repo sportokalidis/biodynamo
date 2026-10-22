@@ -476,10 +476,11 @@ void StandaloneExporter::WriteDiffusionStepVti() {
       vti << "<?xml version=\"1.0\"?>\n";
       vti << "<VTKFile type=\"ImageData\" version=\"0.1\""
              " byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
-      vti << "  <ImageData" << " WholeExtent=\"0 " << nx - 1 << " 0 " << ny - 1
-          << " 0 " << nz - 1 << "\"" << " Origin=\"" << ox << " " << oy << " "
-          << oz << "\"" << " Spacing=\"" << box << " " << box << " " << box
-          << "\">\n";
+      vti << "  <ImageData"
+          << " WholeExtent=\"0 " << nx - 1 << " 0 " << ny - 1 << " 0 " << nz - 1
+          << "\""
+          << " Origin=\"" << ox << " " << oy << " " << oz << "\""
+          << " Spacing=\"" << box << " " << box << " " << box << "\">\n";
       vti << "    <Piece Extent=\"0 " << nx - 1 << " 0 " << ny - 1 << " "
           << k_begin << " " << k_end << "\">\n";
       vti << "      <PointData>\n";
@@ -562,10 +563,13 @@ void StandaloneExporter::WriteDiffusionPvti(
   pvti << "<?xml version=\"1.0\"?>\n";
   pvti << "<VTKFile type=\"PImageData\" version=\"0.1\""
           " byte_order=\"LittleEndian\">\n";
-  pvti << "  <PImageData" << " WholeExtent=\"0 " << nx - 1 << " 0 " << ny - 1
-       << " 0 " << nz - 1 << "\"" << " GhostLevel=\"0\"" << " Origin=\"" << ox
-       << " " << oy << " " << oz << "\"" << " Spacing=\"" << spacing << " "
-       << spacing << " " << spacing << "\">\n";
+  pvti << "  <PImageData"
+       << " WholeExtent=\"0 " << nx - 1 << " 0 " << ny - 1 << " 0 " << nz - 1
+       << "\""
+       << " GhostLevel=\"0\""
+       << " Origin=\"" << ox << " " << oy << " " << oz << "\""
+       << " Spacing=\"" << spacing << " " << spacing << " " << spacing
+       << "\">\n";
 
   pvti << "    <PPointData>\n";
   if (has_concentration)
@@ -580,9 +584,11 @@ void StandaloneExporter::WriteDiffusionPvti(
     size_t k0 = static_cast<size_t>(i) * boxes_per_piece;
     size_t k1 =
         std::min(k0 + boxes_per_piece, nz - 1);  // inclusive, shared or last
-    pvti << "    <Piece" << " Extent=\"0 " << nx - 1 << " 0 " << ny - 1 << " "
-         << k0 << " " << k1 << "\"" << " Source=\"diffusion_" << name << "_"
-         << step_ << "_p" << i << ".vti\"/>\n";
+    pvti << "    <Piece"
+         << " Extent=\"0 " << nx - 1 << " 0 " << ny - 1 << " " << k0 << " "
+         << k1 << "\""
+         << " Source=\"diffusion_" << name << "_" << step_ << "_p" << i
+         << ".vti\"/>\n";
   }
 
   pvti << "  </PImageData>\n</VTKFile>\n";
