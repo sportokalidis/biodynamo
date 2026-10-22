@@ -20,8 +20,11 @@ concurrency:
 jobs:
   build:
     strategy:
+      # Let every runner report. Otherwise the first failure cancels the
+      # others and a macOS-version-specific problem hides the rest.
+      fail-fast: false
       matrix:
-        os: [macos-14, macos-15]
+        os: [macos-14, macos-15, macos-26]
 
     runs-on: ${{ matrix.os }}
 
@@ -38,7 +41,7 @@ jobs:
           echo "GHA_BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
         fi
 
-        echo "GHA_REPOSITORY=${{ github.repository}}" >> $GITHUB_ENV
+        echo "GHA_REPOSITORY=${{ github.event.pull_request.head.repo.full_name || github.repository }}" >> $GITHUB_ENV
 
     - name: Install BioDynaMo
       shell: zsh {0}
@@ -109,6 +112,7 @@ jobs:
         source $(find /Users -path "*/bin/*" -name "*thisbdm.sh")
         root --version
         root -config
-        git config --system user.name "Test User"
-        git config --system user.email user@test.com
+        git config --global --add safe.directory '*'
+        sudo git config --system user.name "Test User"
+        sudo git config --system user.email user@test.com
         make run-demos

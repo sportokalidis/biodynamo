@@ -153,6 +153,7 @@ option(website   "Enable website generation (make website<-live>)." OFF)
 option(valgrind  "Enable valgrind tests and make build compatible with valgrind tool." ON)
 option(rpath     "Link libraries with built-in RPATH (run-time search path)." OFF)
 option(real_t    "Define data type for real numbers. Currently supported: float, double" double)
+option(boost     "Enable Boost-based behaviors (e.g. RegulatoryNetwork)." ON)
 
 if(APPLE)
   # ParaView on Apple devices
@@ -190,6 +191,18 @@ else()
 endif()
 
 # -------------------- find packages ------------------------------------------
+if(boost)
+  find_package(Boost)
+  if(Boost_FOUND)
+    include_directories(${Boost_INCLUDE_DIRS})
+    add_definitions("-DUSE_BOOST")
+    message(STATUS "Boost found: ${Boost_INCLUDE_DIRS}")
+  else()
+    message(WARNING "Boost not found. Boost-based behaviors (e.g. RegulatoryNetwork) will be disabled. "
+                    "Install libboost-dev (apt), boost (brew), or boost-devel (yum) to enable, or disable with -Dboost=OFF.")
+    set(boost OFF)
+  endif()
+endif()
 if (tcmalloc)
   find_package(tcmalloc)
   if(NOT TCMALLOC_FOUND)
@@ -226,8 +239,12 @@ if(NOPYENV)
          "is required in order to successfully use BioDynaMo.")      
    endif()
 else()
-   # Check if Python 3.9.1 from PyEnv is installed
+   # Check if the platform-specific Python 3.9 from PyEnv is installed
    set(pythonvers "3.9.1")
+   if(DETECTED_OS STREQUAL "ubuntu-26.04")
+      # Same Python ABI as the reused Ubuntu 24.04 archives; supports OpenSSL 3.
+      set(pythonvers "3.9.25")
+   endif()
    find_package(Python ${pythonvers} EXACT COMPONENTS Interpreter Development)
    if (NOT Python_FOUND)
       message(FATAL_ERROR "We did not find the Python ${pythonvers} interpreter from PyEnv. "
@@ -241,6 +258,12 @@ else()
          "eval \"$(pyenv init -)\" \n"
          "pyenv shell ${pythonvers}")
    endif()
+   # ParaView/VTK call find_package(Python3 ...) internally, unconstrained by
+   # version. Pin it to the same pyenv interpreter found above so it doesn't
+   # discover a newer system Python instead (e.g. Ubuntu 26.04 ships Python
+   # 3.14 by default, without its -dev headers installed).
+   set(Python3_EXECUTABLE ${Python_EXECUTABLE} CACHE FILEPATH
+       "Pin ParaView/VTK's Python3 lookup to the pyenv interpreter" FORCE)
 endif()
 
 # Check if OpenMPI is present
@@ -323,6 +346,13 @@ find_package(Git)
 find_package(ROOT COMPONENTS Geom Gui GenVector)
 verify_ROOT()
 
+# Repair MacPorts/XQuartz library paths in downloaded ROOT, including cached copies.
+if(APPLE AND ROOT_FOUND AND ROOT_INCLUDE_DIRS)
+  list(GET ROOT_INCLUDE_DIRS 0 BDM_ROOT_INCLUDE_DIR)
+  string(REGEX REPLACE "/include$" "" BDM_ROOT_PREFIX "${BDM_ROOT_INCLUDE_DIR}")
+  fix_root_install_names("${BDM_ROOT_PREFIX}")
+endif()
+
 if (dict)
   add_definitions("-DUSE_DICT")
 endif()
@@ -377,7 +407,9 @@ if(paraview)
                 if (EXISTS ${CMAKE_THIRD_PARTY_DIR}/paraview/tar-sha256)
                     # check if SHA256 of installed ParaView is the same as the expected one
                     file(READ ${CMAKE_THIRD_PARTY_DIR}/paraview/tar-sha256 TAR_SHA256)
-                    if(NOT "${TAR_SHA256}" STREQUAL "${${DETECTED_OS_VERS}-ParaView}")
+                    # Use the same checksum key as the download path.
+                    bdm_paraview_platform(PARAVIEW_TAR_FILE PARAVIEW_SHA_KEY)
+                    if(NOT "${TAR_SHA256}" STREQUAL "${${PARAVIEW_SHA_KEY}}")
                         # BDM installed ParaView has wrong SHA256... deleting it
                         message(WARNING "The found ParaView version is not compatible... deleting it...")
                         file(REMOVE_RECURSE ${CMAKE_THIRD_PARTY_DIR}/paraview)
@@ -816,18 +848,16 @@ install_inside_build()
 #---Populate the configure arguments returned by 'bdm-config --config'
 get_cmake_property(variables CACHE_VARIABLES)
 foreach(var ${variables})
-  if((var MATCHES "_(LIBRARIES|LIBRARY|INCLUDE|VERSION)") AND
-     (NOT ${${var}} STREQUAL "") AND
-     (NOT ${var} MATCHES "NOTFOUND"))
+  if(("${var}" MATCHES "_(LIBRARIES|LIBRARY|INCLUDE|VERSION)") AND
+     (NOT "${${var}}" STREQUAL "") AND
+     (NOT "${${var}}" MATCHES "NOTFOUND"))
     if (var MATCHES "^QT_")
       # filter out the very long list of Qt libraries and include dirs
       if (var MATCHES "(QT_LIBRARY_DIR|QT_QTCORE_INCLUDE_DIR)")
         set(BDM_CONFIGARGS "${BDM_CONFIGARGS}${var}=${${var}} ")
       endif()
-    else()
-      if ((NOT var MATCHES "_(DOCS|TESTS|INSTALL)") AND (NOT var MATCHES "^_"))
-        set(BDM_CONFIGARGS "${BDM_CONFIGARGS}${var}=${${var}} ")
-      endif()
+    elseif ((NOT var MATCHES "_(DOCS|TESTS|INSTALL)") AND (NOT var MATCHES "^_"))
+      set(BDM_CONFIGARGS "${BDM_CONFIGARGS}${var}=${${var}} ")
     endif()
   endif()
 endforeach()

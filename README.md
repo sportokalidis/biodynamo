@@ -44,6 +44,28 @@ curl https://biodynamo.github.io/install | bash
 
 For more information, check out our [user's guide](https://www.biodynamo.org/user-guide) documentation that is designed for people who will use BioDynaMo on a day-to-day basis, and aims at providing users with all essential info to make full use of BioDynaMo.
 
+
+## Try it online
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/BioDynaMo/biodynamoOnline)
+
+Click the badge above to launch a pre-configured BioDynaMo environment in your browser.
+You just need a free GitHub account (120 core-hours/month free).
+
+
+### Quick start
+
+Once the codespace loads, run a demo:
+```bash
+cd demo/cell_division
+bdm build
+bdm run
+bdm view   # opens ParaView on the VNC desktop
+```
+
+A **VNC desktop** tab opens automatically in your browser (port 6080).
+ParaView and other GUI applications render there.
+
 <!-- ## Examples
 -- Show some nice visualizations here, with a one-liner explanation -->
 
