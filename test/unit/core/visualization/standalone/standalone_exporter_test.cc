@@ -165,25 +165,26 @@ TEST(StandaloneExporterTest, WriteStepExportsAdditionalDataMembers) {
 
 // -----------------------------------------------------------------------------
 TEST(StandaloneExporterTest, WriteDiffusionStepCreatesExpectedFiles) {
+  // Param is only mutable through the pointer the Simulation constructor
+  // hands to this callback; GetParam() returns a const Param* afterwards.
   auto set_param = [](auto* param) {
     param->bound_space = Param::BoundSpaceMode::kClosed;
     param->min_bound = -100;
     param->max_bound = 100;
+
+    Param::VisualizeDiffusion vd;
+    vd.name = "Na";
+    vd.concentration = true;
+    vd.gradient = true;
+    param->visualize_diffusion.push_back(vd);
   };
   Simulation sim(TEST_NAME, set_param);
   std::string viz_dir = FreshVizDir(&sim);
-  auto* param = sim.GetParam();
   auto* rm = sim.GetResourceManager();
 
   enum Substances { kNa };
   ModelInitializer::DefineSubstance(kNa, "Na", 0.05, 0, 5);
   rm->GetDiffusionGrid(kNa)->Initialize();
-
-  Param::VisualizeDiffusion vd;
-  vd.name = "Na";
-  vd.concentration = true;
-  vd.gradient = true;
-  param->visualize_diffusion.push_back(vd);
 
   StandaloneExporter exporter(viz_dir);
   exporter.WriteDiffusionStep();
@@ -204,13 +205,18 @@ TEST(StandaloneExporterTest, WriteDiffusionStepCreatesExpectedFiles) {
 /// export_visualization off so VisualizationOp's own plugin-loading path is
 /// never triggered; only this test's own StandaloneAdaptor instance writes.
 TEST(StandaloneAdaptorTest, VisualizeHonorsExportGate) {
-  Simulation sim(TEST_NAME);
+  // Capture the mutable Param* the constructor hands to this callback;
+  // GetParam() returns a const Param* once the Simulation is built, but
+  // this test needs to flip export_visualization and visualization_interval
+  // partway through.
+  Param* param = nullptr;
+  Simulation sim(TEST_NAME, [&](Param* p) {
+    param = p;
+    param->export_visualization = false;
+  });
   std::string viz_dir = FreshVizDir(&sim);
-  auto* param = sim.GetParam();
   auto* rm = sim.GetResourceManager();
   rm->AddAgent(new Cell({0, 0, 0}));
-
-  param->export_visualization = false;
 
   StandaloneAdaptor adaptor;
   adaptor.Visualize();  // lazy-init only; export disabled -> no write
