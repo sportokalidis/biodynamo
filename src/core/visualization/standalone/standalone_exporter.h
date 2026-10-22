@@ -46,8 +46,8 @@
 //
 // -----------------------------------------------------------------------------
 
-#ifndef BDM_SRC_CORE_VISUALIZATION_STANDALONE_STANDALONE_EXPORTER_H_
-#define BDM_SRC_CORE_VISUALIZATION_STANDALONE_STANDALONE_EXPORTER_H_
+#ifndef CORE_VISUALIZATION_STANDALONE_STANDALONE_EXPORTER_H_
+#define CORE_VISUALIZATION_STANDALONE_STANDALONE_EXPORTER_H_
 
 #include <cstddef>
 #include <string>
@@ -121,22 +121,17 @@ class StandaloneExporter {
   void WriteDiffusionStepVtu();
 
   /// Write the VTI parallel index file for one diffusion substance.
-  void WriteDiffusionPvti(const std::string& name,
-                          bool has_concentration,
-                          bool has_gradient,
-                          std::size_t nx, std::size_t ny, std::size_t nz,
-                          double ox, double oy, double oz,
-                          double spacing,
-                          int pieces,
+  void WriteDiffusionPvti(const std::string& name, bool has_concentration,
+                          bool has_gradient, std::size_t nx, std::size_t ny,
+                          std::size_t nz, double ox, double oy, double oz,
+                          double spacing, int pieces,
                           std::size_t boxes_per_piece) const;
 
   /// Write the VTU parallel index file for one diffusion substance.
-  void WriteDiffusionVtuIndex(const std::string& name,
-                              bool has_concentration,
-                              bool has_gradient,
-                              int pieces) const;
+  void WriteDiffusionVtuIndex(const std::string& name, bool has_concentration,
+                              bool has_gradient, int pieces) const;
 };
 
 }  // namespace bdm
 
-#endif  // BDM_SRC_CORE_VISUALIZATION_STANDALONE_STANDALONE_EXPORTER_H_
+#endif  // CORE_VISUALIZATION_STANDALONE_STANDALONE_EXPORTER_H_

@@ -38,10 +38,10 @@
 //
 // -----------------------------------------------------------------------------
 
-#ifndef BDM_SRC_CORE_VISUALIZATION_STANDALONE_ADAPTOR_H_
-#define BDM_SRC_CORE_VISUALIZATION_STANDALONE_ADAPTOR_H_
+#ifndef CORE_VISUALIZATION_STANDALONE_ADAPTOR_H_
+#define CORE_VISUALIZATION_STANDALONE_ADAPTOR_H_
 
-#include "core/util/root.h"                           // BDM_CLASS_DEF_NV
+#include "core/util/root.h"                            // BDM_CLASS_DEF_NV
 #include "core/visualization/visualization_adaptor.h"  // abstract base
 
 namespace bdm {
@@ -91,4 +91,4 @@ class StandaloneAdaptor : public VisualizationAdaptor {
 
 }  // namespace bdm
 
-#endif  // BDM_SRC_CORE_VISUALIZATION_STANDALONE_ADAPTOR_H_
+#endif  // CORE_VISUALIZATION_STANDALONE_ADAPTOR_H_

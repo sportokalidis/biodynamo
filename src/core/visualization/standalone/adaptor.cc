@@ -15,10 +15,11 @@
 #include "core/visualization/standalone/adaptor.h"
 
 #include <filesystem>  // std::filesystem::create_directories (C++17)
+#include <string>
 
-#include "core/param/param.h"       // export_visualization, visualization_interval
-#include "core/scheduler.h"         // GetSimulatedSteps()
-#include "core/simulation.h"        // Simulation::GetActive(), GetOutputDir()
+#include "core/param/param.h"  // export_visualization, visualization_interval
+#include "core/scheduler.h"    // GetSimulatedSteps()
+#include "core/simulation.h"   // Simulation::GetActive(), GetOutputDir()
 #include "core/visualization/standalone/standalone_exporter.h"
 
 namespace bdm {
@@ -27,7 +28,9 @@ namespace bdm {
 /// ROOT plugin entry point.  TPluginManager resolves "Factory" by name via
 /// cling and calls it to obtain a heap-allocated adaptor instance.  The
 /// returned pointer is owned by the caller (VisualizationAdaptor::Create).
-StandaloneAdaptor* StandaloneAdaptor::Factory() { return new StandaloneAdaptor(); }
+StandaloneAdaptor* StandaloneAdaptor::Factory() {
+  return new StandaloneAdaptor();
+}
 
 // -----------------------------------------------------------------------------
 StandaloneAdaptor::StandaloneAdaptor() = default;
@@ -55,7 +58,7 @@ StandaloneAdaptor::~StandaloneAdaptor() { delete exporter_; }
 ///    This mirrors the gating logic in ParaviewAdaptor so that both adaptors
 ///    write files at exactly the same simulation steps.
 void StandaloneAdaptor::Visualize() {
-  auto* sim   = Simulation::GetActive();
+  auto* sim = Simulation::GetActive();
   auto* param = sim->GetParam();
 
   // ----- Phase 1: lazy init ------------------------------------------------
@@ -66,7 +69,7 @@ void StandaloneAdaptor::Visualize() {
     // create_directories is equivalent to "mkdir -p": it succeeds even if
     // intermediate directories already exist.
     std::filesystem::create_directories(out_dir);
-    exporter_    = new StandaloneExporter(out_dir);
+    exporter_ = new StandaloneExporter(out_dir);
     initialized_ = true;
   }
 

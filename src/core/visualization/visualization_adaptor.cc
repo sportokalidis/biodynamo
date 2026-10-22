@@ -18,13 +18,13 @@
 #include "core/param/param.h"
 #include "core/simulation.h"
 #include "core/util/log.h"
-#include "core/visualization/visualization_adaptor.h"
 #include "core/visualization/standalone/adaptor.h"
+#include "core/visualization/visualization_adaptor.h"
 
+#include "TEnv.h"
 #include "TInterpreter.h"
 #include "TPluginManager.h"
 #include "TROOT.h"
-#include "TEnv.h"
 
 namespace bdm {
 
@@ -41,7 +41,7 @@ VisualizationAdaptor *VisualizationAdaptor::Create(const std::string &adaptor) {
   }
   VisualizationAdaptor *va = nullptr;
   // Ensure ROOT reads BioDynaMo plugin configuration
-  const char* bdmsys = std::getenv("BDMSYS");
+  const char *bdmsys = std::getenv("BDMSYS");
   if (bdmsys) {
     std::string rc = std::string(bdmsys) + "/etc/bdm.rootrc";
     gEnv->ReadFile(rc.c_str(), kEnvUser);

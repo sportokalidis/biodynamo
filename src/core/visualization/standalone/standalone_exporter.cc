@@ -14,6 +14,7 @@
 
 #include "core/visualization/standalone/standalone_exporter.h"
 
+#include <algorithm>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -24,29 +25,31 @@
 #include "TClass.h"
 #include "TDataMember.h"
 
-#include "core/agent/agent.h"           // Agent base class, GetPosition(), GetUid()
-#include "core/agent/cell.h"            // Cell subclass for mass/volume/traction
+#include "core/agent/agent.h"  // Agent base class, GetPosition(), GetUid()
+#include "core/agent/cell.h"   // Cell subclass for mass/volume/traction
 #include "core/diffusion/diffusion_grid.h"  // DiffusionGrid, GetAllConcentrations()
-#include "core/param/param.h"           // Param::VisualizeDiffusion
-#include "core/resource_manager.h"      // ForEachAgent(), GetDiffusionGrid()
-#include "core/simulation.h"            // Simulation::GetActive()
-#include "core/util/thread_info.h"      // GetMaxThreads()
+#include "core/param/param.h"               // Param::VisualizeDiffusion
+#include "core/resource_manager.h"  // ForEachAgent(), GetDiffusionGrid()
+#include "core/simulation.h"        // Simulation::GetActive()
+#include "core/util/thread_info.h"  // GetMaxThreads()
 
 namespace bdm {
 
 // Forward declaration — defined later in this translation unit.
 static bool ReadScalarMember(const Agent* agent, const std::string& name,
-                             double& out);
+                             double* out);
 
 // -----------------------------------------------------------------------------
 /// Parse bdm.toml to extract scalar member names from additional_data_members.
 ///
 /// Called once from the constructor; the result is cached in extra_members_.
-/// A hand-rolled regex parser is used to avoid adding a TOML library dependency.
+/// A hand-rolled regex parser is used to avoid adding a TOML library
+/// dependency.
 static std::vector<std::string> LoadAdditionalMembers() {
   std::vector<std::string> names;
   std::ifstream ifs("bdm.toml");
-  if (!ifs) return names;
+  if (!ifs)
+    return names;
 
   std::string line;
   // Matches: additional_data_members = ["name1", "name2", ...]
@@ -67,7 +70,8 @@ static std::vector<std::string> LoadAdditionalMembers() {
 // -----------------------------------------------------------------------------
 StandaloneExporter::StandaloneExporter(const std::string& output_dir)
     : output_dir_(output_dir),
-      // Load member names once at construction; bdm.toml does not change at runtime.
+      // Load member names once at construction; bdm.toml does not change at
+      // runtime.
       extra_members_(LoadAdditionalMembers()) {}
 
 // -----------------------------------------------------------------------------
@@ -101,15 +105,15 @@ StandaloneExporter::~StandaloneExporter() = default;
 /// writing diffusion files so both file families share the same suffix N.
 void StandaloneExporter::WriteStep() {
   auto* sim = Simulation::GetActive();
-  auto* rm  = sim->GetResourceManager();
+  auto* rm = sim->GetResourceManager();
 
   // ── Collect per-agent data into flat arrays ──────────────────────────────
   //
   // Flat vectors (not vector-of-structs) allow each parallel thread to slice
   // out its range with a single pointer arithmetic operation.
-  std::vector<Agent*>   agents;
-  std::vector<double>   points;  // interleaved x,y,z for all agents
-  std::vector<uint64_t> ids;     // unique agent identifier (UID index)
+  std::vector<Agent*> agents;
+  std::vector<double> points;  // interleaved x,y,z for all agents
+  std::vector<uint64_t> ids;   // unique agent identifier (UID index)
 
   rm->ForEachAgent([&](Agent* a) {
     agents.push_back(a);
@@ -137,22 +141,24 @@ void StandaloneExporter::WriteStep() {
     extra_vals[f].resize(n);
     for (size_t i = 0; i < n; ++i) {
       double val = 0.0;
-      ReadScalarMember(agents[i], extra_members_[f], val);
+      ReadScalarMember(agents[i], extra_members_[f], &val);
       extra_vals[f][i] = val;
     }
   }
 
   // ── Compute piece partition ───────────────────────────────────────────────
-  auto*    tinfo      = ThreadInfo::GetInstance();
+  auto* tinfo = ThreadInfo::GetInstance();
   uint64_t max_threads = tinfo->GetMaxThreads();
-  uint64_t num_pieces  = std::max<uint64_t>(1, std::min<uint64_t>(max_threads, n));
-  uint64_t per_piece   = (n + num_pieces - 1) / num_pieces;  // ceiling division
+  uint64_t num_pieces =
+      std::max<uint64_t>(1, std::min<uint64_t>(max_threads, n));
+  uint64_t per_piece = (n + num_pieces - 1) / num_pieces;  // ceiling division
 
-  // ── Write one .vtu file per piece in parallel ─────────────────────────────
-  #pragma omp parallel for schedule(static, 1)
+// ── Write one .vtu file per piece in parallel ─────────────────────────────
+#pragma omp parallel for schedule(static, 1)
   for (uint64_t p = 0; p < num_pieces; ++p) {
     uint64_t begin = p * per_piece;
-    if (begin >= n) continue;
+    if (begin >= n)
+      continue;
     uint64_t count = std::min<uint64_t>(per_piece, n - begin);
 
     std::ostringstream vtu_name;
@@ -165,8 +171,8 @@ void StandaloneExporter::WriteStep() {
     vtu << "<VTKFile type=\"UnstructuredGrid\" version=\"0.1\""
            " byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
     vtu << "  <UnstructuredGrid>\n";
-    vtu << "    <Piece NumberOfPoints=\"" << count
-        << "\" NumberOfCells=\""          << count << "\">\n";
+    vtu << "    <Piece NumberOfPoints=\"" << count << "\" NumberOfCells=\""
+        << count << "\">\n";
     vtu << "      <PointData>\n";
 
     // The VTK "appended raw" format separates metadata (XML tags with offsets)
@@ -174,13 +180,17 @@ void StandaloneExporter::WriteStep() {
     // any XML, so we collect (tag, size, data_ptr) entries first.
     // offset is the byte position of the 4-byte length prefix in the binary
     // block; the actual payload starts at offset+4.
-    struct ArrayMeta { std::string tag; uint32_t nbytes; const char* data; };
+    struct ArrayMeta {
+      std::string tag;
+      uint32_t nbytes;
+      const char* data;
+    };
     std::vector<ArrayMeta> metas;
     uint32_t offset = 0;
 
     auto append_array = [&](const std::string& type, const std::string& name,
-                            int components, const void* buf,
-                            size_t elems, size_t elem_size) {
+                            int components, const void* buf, size_t elems,
+                            size_t elem_size) {
       uint32_t bytes = static_cast<uint32_t>(elems * components * elem_size);
       std::ostringstream tag;
       tag << "        <DataArray type=\"" << type << "\" Name=\"" << name
@@ -192,20 +202,22 @@ void StandaloneExporter::WriteStep() {
 
     // Slices into the pre-extracted flat arrays using `begin` as the offset.
     // No data is copied — the pointers reference the original buffers.
-    append_array("UInt64",  "Cell_ID",  1, &ids[begin],   count, sizeof(uint64_t));
-    append_array("Float64", "Diameter", 1, &diam[begin],  count, sizeof(double));
+    append_array("UInt64", "Cell_ID", 1, &ids[begin], count, sizeof(uint64_t));
+    append_array("Float64", "Diameter", 1, &diam[begin], count, sizeof(double));
     for (size_t f = 0; f < extra_members_.size(); ++f)
-      append_array("Float64", extra_members_[f], 1,
-                   &extra_vals[f][begin], count, sizeof(double));
+      append_array("Float64", extra_members_[f], 1, &extra_vals[f][begin],
+                   count, sizeof(double));
 
-    for (auto& m : metas) vtu << m.tag;
+    for (auto& m : metas)
+      vtu << m.tag;
     vtu << "      </PointData>\n";
 
     vtu << "      <Points>\n";
     {
       std::ostringstream tag;
       tag << "        <DataArray type=\"Float64\" NumberOfComponents=\"3\""
-             " format=\"appended\" offset=\"" << offset << "\"/>\n";
+             " format=\"appended\" offset=\""
+          << offset << "\"/>\n";
       vtu << tag.str();
       metas.push_back({"", static_cast<uint32_t>(count * 3 * sizeof(double)),
                        reinterpret_cast<const char*>(&points[begin * 3])});
@@ -220,8 +232,8 @@ void StandaloneExporter::WriteStep() {
     std::vector<int32_t> conn(count), offs(count);
     std::vector<uint8_t> types_arr(count);
     for (uint64_t i = 0; i < count; ++i) {
-      conn[i]      = static_cast<int32_t>(i);
-      offs[i]      = static_cast<int32_t>(i + 1);
+      conn[i] = static_cast<int32_t>(i);
+      offs[i] = static_cast<int32_t>(i + 1);
       types_arr[i] = 1;
     }
 
@@ -229,7 +241,8 @@ void StandaloneExporter::WriteStep() {
     {
       std::ostringstream tag;
       tag << "        <DataArray type=\"Int32\" Name=\"connectivity\""
-             " format=\"appended\" offset=\"" << offset << "\"/>\n";
+             " format=\"appended\" offset=\""
+          << offset << "\"/>\n";
       vtu << tag.str();
       metas.push_back({"", static_cast<uint32_t>(count * sizeof(int32_t)),
                        reinterpret_cast<const char*>(conn.data())});
@@ -238,7 +251,8 @@ void StandaloneExporter::WriteStep() {
     {
       std::ostringstream tag;
       tag << "        <DataArray type=\"Int32\" Name=\"offsets\""
-             " format=\"appended\" offset=\"" << offset << "\"/>\n";
+             " format=\"appended\" offset=\""
+          << offset << "\"/>\n";
       vtu << tag.str();
       metas.push_back({"", static_cast<uint32_t>(count * sizeof(int32_t)),
                        reinterpret_cast<const char*>(offs.data())});
@@ -247,7 +261,8 @@ void StandaloneExporter::WriteStep() {
     {
       std::ostringstream tag;
       tag << "        <DataArray type=\"UInt8\" Name=\"types\""
-             " format=\"appended\" offset=\"" << offset << "\"/>\n";
+             " format=\"appended\" offset=\""
+          << offset << "\"/>\n";
       vtu << tag.str();
       metas.push_back({"", static_cast<uint32_t>(count * sizeof(uint8_t)),
                        reinterpret_cast<const char*>(types_arr.data())});
@@ -288,20 +303,32 @@ void StandaloneExporter::WriteStep() {
 /// TDataMember::GetOffset() returns the byte offset of the field — equivalent
 /// to offsetof() but computed at runtime from the ROOT dictionary.
 static bool ReadScalarMember(const Agent* agent, const std::string& name,
-                             double& out) {
+                             double* out) {
   TClass* cls = TClass::GetClass(typeid(*agent));
-  if (!cls) return false;
+  if (!cls)
+    return false;
   TDataMember* dm = cls->GetDataMember(name.c_str());
-  if (!dm)  return false;
+  if (!dm)
+    return false;
 
   const char* addr = reinterpret_cast<const char*>(agent) + dm->GetOffset();
   std::string tname = dm->GetTypeName();
 
-  if (tname == "double") { out = *reinterpret_cast<const double*>(addr); return true; }
-  if (tname == "float")  { out = static_cast<double>(*reinterpret_cast<const float*>(addr));  return true; }
-  if (tname == "int")    { out = static_cast<double>(*reinterpret_cast<const int*>(addr));    return true; }
-  if (tname == "uint64_t" || tname == "unsigned long" || tname == "unsigned long long") {
-    out = static_cast<double>(*reinterpret_cast<const unsigned long long*>(addr));
+  if (tname == "double") {
+    *out = *reinterpret_cast<const double*>(addr);
+    return true;
+  }
+  if (tname == "float") {
+    *out = static_cast<double>(*reinterpret_cast<const float*>(addr));
+    return true;
+  }
+  if (tname == "int") {
+    *out = static_cast<double>(*reinterpret_cast<const int*>(addr));
+    return true;
+  }
+  if (tname == "uint64_t" || tname == "unsigned long" ||
+      tname == "unsigned long long") {
+    *out = static_cast<double>(*reinterpret_cast<const uint64_t*>(addr));
     return true;
   }
   return false;
@@ -380,18 +407,19 @@ void StandaloneExporter::WriteDiffusionStep() {
 /// assembles the dataset without gaps.  The extra layer is zero-copy: the
 /// pointer simply reads one more row from the grid's own storage.
 void StandaloneExporter::WriteDiffusionStepVti() {
-  auto* sim   = Simulation::GetActive();
-  auto* rm    = sim->GetResourceManager();
+  auto* sim = Simulation::GetActive();
+  auto* rm = sim->GetResourceManager();
   auto* param = sim->GetParam();
 
   for (const auto& vd : param->visualize_diffusion) {
     auto* grid = rm->GetDiffusionGrid(vd.name);
-    if (!grid) continue;
+    if (!grid)
+      continue;
 
     // ── Grid geometry ────────────────────────────────────────────────────
-    const auto num_boxes = grid->GetNumBoxesArray();   // {nx, ny, nz}
-    const auto dims      = grid->GetDimensions();       // {xmin,xmax,ymin,ymax,zmin,zmax}
-    const auto box       = grid->GetBoxLength();
+    const auto num_boxes = grid->GetNumBoxesArray();  // {nx, ny, nz}
+    const auto dims = grid->GetDimensions();  // {xmin,xmax,ymin,ymax,zmin,zmax}
+    const auto box = grid->GetBoxLength();
 
     const size_t nx = static_cast<size_t>(num_boxes[0]);
     const size_t ny = static_cast<size_t>(num_boxes[1]);
@@ -409,18 +437,19 @@ void StandaloneExporter::WriteDiffusionStepVti() {
     const real_t* grad = grid->GetAllGradients();
 
     // ── Partition the Z dimension into slabs ─────────────────────────────
-    auto*    tinfo           = ThreadInfo::GetInstance();
-    uint64_t max_threads     = tinfo->GetMaxThreads();
-    uint64_t num_pieces      = std::min<uint64_t>(std::max<uint64_t>(1, nz),
-                                                  std::max<uint64_t>(1, max_threads));
+    auto* tinfo = ThreadInfo::GetInstance();
+    uint64_t max_threads = tinfo->GetMaxThreads();
+    uint64_t num_pieces = std::min<uint64_t>(
+        std::max<uint64_t>(1, nz), std::max<uint64_t>(1, max_threads));
     uint64_t boxes_per_piece = (nz + num_pieces - 1) / num_pieces;  // ceil
 
     const char* rt = (sizeof(real_t) == 4) ? "Float32" : "Float64";
 
-    #pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for schedule(static, 1)
     for (uint64_t p = 0; p < num_pieces; ++p) {
       uint64_t k_begin = p * boxes_per_piece;
-      if (k_begin >= nz) continue;
+      if (k_begin >= nz)
+        continue;
       uint64_t k_len = std::min<uint64_t>(boxes_per_piece, nz - k_begin);
 
       // k_end is the inclusive last Z-point index written by this piece.
@@ -429,40 +458,43 @@ void StandaloneExporter::WriteDiffusionStepVti() {
       uint64_t k_end;
       uint64_t layers;
       if (k_begin + k_len < nz) {
-        k_end  = k_begin + k_len;
+        k_end = k_begin + k_len;
         layers = k_len + 1;
       } else {
-        k_end  = nz - 1;
+        k_end = nz - 1;
         layers = k_len;
       }
 
-      const uint64_t piece_cells = static_cast<uint64_t>(nx) *
-                                   static_cast<uint64_t>(ny) * layers;
+      const uint64_t piece_cells =
+          static_cast<uint64_t>(nx) * static_cast<uint64_t>(ny) * layers;
 
       std::ostringstream vti_name;
-      vti_name << output_dir_ << "/diffusion_" << vd.name << "_"
-               << step_ << "_p" << p << ".vti";
+      vti_name << output_dir_ << "/diffusion_" << vd.name << "_" << step_
+               << "_p" << p << ".vti";
       std::ofstream vti(vti_name.str(), std::ios::binary);
 
       vti << "<?xml version=\"1.0\"?>\n";
       vti << "<VTKFile type=\"ImageData\" version=\"0.1\""
              " byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
-      vti << "  <ImageData"
-          << " WholeExtent=\"0 " << nx-1 << " 0 " << ny-1
-          << " 0 " << nz-1 << "\""
-          << " Origin=\""  << ox << " " << oy << " " << oz << "\""
-          << " Spacing=\"" << box << " " << box << " " << box << "\">\n";
-      vti << "    <Piece Extent=\"0 " << nx-1 << " 0 " << ny-1
-          << " " << k_begin << " " << k_end << "\">\n";
+      vti << "  <ImageData" << " WholeExtent=\"0 " << nx - 1 << " 0 " << ny - 1
+          << " 0 " << nz - 1 << "\"" << " Origin=\"" << ox << " " << oy << " "
+          << oz << "\"" << " Spacing=\"" << box << " " << box << " " << box
+          << "\">\n";
+      vti << "    <Piece Extent=\"0 " << nx - 1 << " 0 " << ny - 1 << " "
+          << k_begin << " " << k_end << "\">\n";
       vti << "      <PointData>\n";
 
-      struct ArrayMeta { std::string tag; uint32_t nbytes; const char* data; };
+      struct ArrayMeta {
+        std::string tag;
+        uint32_t nbytes;
+        const char* data;
+      };
       std::vector<ArrayMeta> metas;
       uint32_t offset_bytes = 0;
 
       auto append_array = [&](const std::string& type, const std::string& aname,
-                              int components, const void* buf,
-                              size_t elems, size_t elem_size) {
+                              int components, const void* buf, size_t elems,
+                              size_t elem_size) {
         uint32_t bytes = static_cast<uint32_t>(elems * components * elem_size);
         std::ostringstream tag;
         tag << "        <DataArray type=\"" << type << "\" Name=\"" << aname
@@ -478,14 +510,15 @@ void StandaloneExporter::WriteDiffusionStepVti() {
       // the next slab (zero-copy, the array is always fully allocated).
       const uint64_t data_start = k_begin * static_cast<uint64_t>(nx * ny);
       if (vd.concentration)
-        append_array(rt, "Substance Concentration", 1,
-                     &conc[data_start], piece_cells, sizeof(real_t));
+        append_array(rt, "Substance Concentration", 1, &conc[data_start],
+                     piece_cells, sizeof(real_t));
       if (vd.gradient)
         // Gradients are interleaved (gx,gy,gz per box).
-        append_array(rt, "Diffusion Gradient", 3,
-                     &grad[data_start * 3], piece_cells, sizeof(real_t));
+        append_array(rt, "Diffusion Gradient", 3, &grad[data_start * 3],
+                     piece_cells, sizeof(real_t));
 
-      for (auto& m : metas) vti << m.tag;
+      for (auto& m : metas)
+        vti << m.tag;
       vti << "      </PointData>\n";
       vti << "    </Piece>\n";
       vti << "  </ImageData>\n";
@@ -500,9 +533,8 @@ void StandaloneExporter::WriteDiffusionStepVti() {
       vti.close();
     }
 
-    WriteDiffusionPvti(vd.name, vd.concentration, vd.gradient,
-                       nx, ny, nz, ox, oy, oz, box,
-                       static_cast<int>(num_pieces),
+    WriteDiffusionPvti(vd.name, vd.concentration, vd.gradient, nx, ny, nz, ox,
+                       oy, oz, box, static_cast<int>(num_pieces),
                        static_cast<size_t>(boxes_per_piece));
   }
 }
@@ -519,9 +551,8 @@ void StandaloneExporter::WriteDiffusionStepVti() {
 /// the adjacent piece (same convention as the piece files).
 void StandaloneExporter::WriteDiffusionPvti(
     const std::string& name, bool has_concentration, bool has_gradient,
-    std::size_t nx, std::size_t ny, std::size_t nz,
-    double ox, double oy, double oz, double spacing,
-    int pieces, std::size_t boxes_per_piece) const {
+    std::size_t nx, std::size_t ny, std::size_t nz, double ox, double oy,
+    double oz, double spacing, int pieces, std::size_t boxes_per_piece) const {
   const char* rt = (sizeof(real_t) == 4) ? "Float32" : "Float64";
 
   std::ostringstream pvti_name;
@@ -531,12 +562,10 @@ void StandaloneExporter::WriteDiffusionPvti(
   pvti << "<?xml version=\"1.0\"?>\n";
   pvti << "<VTKFile type=\"PImageData\" version=\"0.1\""
           " byte_order=\"LittleEndian\">\n";
-  pvti << "  <PImageData"
-       << " WholeExtent=\"0 " << nx-1 << " 0 " << ny-1
-       << " 0 " << nz-1 << "\""
-       << " GhostLevel=\"0\""
-       << " Origin=\""  << ox << " " << oy << " " << oz << "\""
-       << " Spacing=\"" << spacing << " " << spacing << " " << spacing << "\">\n";
+  pvti << "  <PImageData" << " WholeExtent=\"0 " << nx - 1 << " 0 " << ny - 1
+       << " 0 " << nz - 1 << "\"" << " GhostLevel=\"0\"" << " Origin=\"" << ox
+       << " " << oy << " " << oz << "\"" << " Spacing=\"" << spacing << " "
+       << spacing << " " << spacing << "\">\n";
 
   pvti << "    <PPointData>\n";
   if (has_concentration)
@@ -549,12 +578,11 @@ void StandaloneExporter::WriteDiffusionPvti(
 
   for (int i = 0; i < pieces; ++i) {
     size_t k0 = static_cast<size_t>(i) * boxes_per_piece;
-    size_t k1 = std::min(k0 + boxes_per_piece, nz - 1);  // inclusive, shared or last
-    pvti << "    <Piece"
-         << " Extent=\"0 " << nx-1 << " 0 " << ny-1
-         << " " << k0 << " " << k1 << "\""
-         << " Source=\"diffusion_" << name << "_" << step_ << "_p" << i
-         << ".vti\"/>\n";
+    size_t k1 =
+        std::min(k0 + boxes_per_piece, nz - 1);  // inclusive, shared or last
+    pvti << "    <Piece" << " Extent=\"0 " << nx - 1 << " 0 " << ny - 1 << " "
+         << k0 << " " << k1 << "\"" << " Source=\"diffusion_" << name << "_"
+         << step_ << "_p" << i << ".vti\"/>\n";
   }
 
   pvti << "  </PImageData>\n</VTKFile>\n";
@@ -578,17 +606,18 @@ void StandaloneExporter::WriteDiffusionPvti(
 /// counter; to activate VTU output, replace the WriteDiffusionStepVti()
 /// call in WriteDiffusionStep() with this method.
 void StandaloneExporter::WriteDiffusionStepVtu() {
-  auto* sim   = Simulation::GetActive();
-  auto* rm    = sim->GetResourceManager();
+  auto* sim = Simulation::GetActive();
+  auto* rm = sim->GetResourceManager();
   auto* param = sim->GetParam();
 
   for (const auto& vd : param->visualize_diffusion) {
     auto* grid = rm->GetDiffusionGrid(vd.name);
-    if (!grid) continue;
+    if (!grid)
+      continue;
 
     const auto num_boxes = grid->GetNumBoxesArray();
-    const auto dims      = grid->GetDimensions();
-    const auto box       = grid->GetBoxLength();
+    const auto dims = grid->GetDimensions();
+    const auto box = grid->GetBoxLength();
 
     const size_t nx = static_cast<size_t>(num_boxes[0]);
     const size_t ny = static_cast<size_t>(num_boxes[1]);
@@ -597,24 +626,25 @@ void StandaloneExporter::WriteDiffusionStepVtu() {
     const real_t* conc = grid->GetAllConcentrations();
     const real_t* grad = grid->GetAllGradients();
 
-    auto*    tinfo           = ThreadInfo::GetInstance();
-    uint64_t max_threads     = tinfo->GetMaxThreads();
-    uint64_t num_pieces      = std::min<uint64_t>(std::max<uint64_t>(1, nz),
-                                                  std::max<uint64_t>(1, max_threads));
+    auto* tinfo = ThreadInfo::GetInstance();
+    uint64_t max_threads = tinfo->GetMaxThreads();
+    uint64_t num_pieces = std::min<uint64_t>(
+        std::max<uint64_t>(1, nz), std::max<uint64_t>(1, max_threads));
     uint64_t boxes_per_piece = (nz + num_pieces - 1) / num_pieces;
 
     const char* rt = (sizeof(real_t) == 4) ? "Float32" : "Float64";
 
-    #pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for schedule(static, 1)
     for (uint64_t p = 0; p < num_pieces; ++p) {
       uint64_t k_begin = p * boxes_per_piece;
-      if (k_begin >= nz) continue;
+      if (k_begin >= nz)
+        continue;
       uint64_t k_len = std::min<uint64_t>(boxes_per_piece, nz - k_begin);
 
-      const uint64_t num_nodes = (nx+1) * (ny+1) * (k_len+1);
+      const uint64_t num_nodes = (nx + 1) * (ny + 1) * (k_len + 1);
       const uint64_t num_cells = nx * ny * k_len;
-      const uint64_t stride_j  = nx + 1;
-      const uint64_t stride_k  = (nx + 1) * (ny + 1);
+      const uint64_t stride_j = nx + 1;
+      const uint64_t stride_k = (nx + 1) * (ny + 1);
 
       // ── Corner node coordinates ───────────────────────────────────────
       // Node (i, j, kl) sits at the corner of voxel (i,j,kl).
@@ -664,8 +694,8 @@ void StandaloneExporter::WriteDiffusionStepVtu() {
       const uint64_t data_start = k_begin * static_cast<uint64_t>(nx * ny);
 
       std::ostringstream vtu_name;
-      vtu_name << output_dir_ << "/diffusion_" << vd.name << "_"
-               << step_ << "_p" << p << ".vtu";
+      vtu_name << output_dir_ << "/diffusion_" << vd.name << "_" << step_
+               << "_p" << p << ".vtu";
       std::ofstream vtu(vtu_name.str(), std::ios::binary);
 
       vtu << "<?xml version=\"1.0\"?>\n";
@@ -673,16 +703,20 @@ void StandaloneExporter::WriteDiffusionStepVtu() {
              " byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
       vtu << "  <UnstructuredGrid>\n";
       vtu << "    <Piece NumberOfPoints=\"" << num_nodes
-          << "\" NumberOfCells=\""          << num_cells << "\">\n";
+          << "\" NumberOfCells=\"" << num_cells << "\">\n";
       vtu << "      <CellData>\n";
 
-      struct ArrayMeta { std::string tag; uint32_t nbytes; const char* data; };
+      struct ArrayMeta {
+        std::string tag;
+        uint32_t nbytes;
+        const char* data;
+      };
       std::vector<ArrayMeta> metas;
       uint32_t offset = 0;
 
       auto append = [&](const std::string& type, const std::string& aname,
-                        int components, const void* buf,
-                        size_t elems, size_t elem_size) {
+                        int components, const void* buf, size_t elems,
+                        size_t elem_size) {
         uint32_t bytes = static_cast<uint32_t>(elems * components * elem_size);
         std::ostringstream tag;
         tag << "        <DataArray type=\"" << type << "\" Name=\"" << aname
@@ -693,22 +727,25 @@ void StandaloneExporter::WriteDiffusionStepVtu() {
       };
 
       if (vd.concentration)
-        append(rt, "Substance Concentration", 1,
-               &conc[data_start], num_cells, sizeof(real_t));
+        append(rt, "Substance Concentration", 1, &conc[data_start], num_cells,
+               sizeof(real_t));
       if (vd.gradient)
-        append(rt, "Diffusion Gradient", 3,
-               &grad[data_start * 3], num_cells, sizeof(real_t));
+        append(rt, "Diffusion Gradient", 3, &grad[data_start * 3], num_cells,
+               sizeof(real_t));
 
-      for (auto& m : metas) vtu << m.tag;
+      for (auto& m : metas)
+        vtu << m.tag;
       vtu << "      </CellData>\n";
 
       vtu << "      <Points>\n";
       {
         std::ostringstream tag;
         tag << "        <DataArray type=\"Float64\" NumberOfComponents=\"3\""
-               " format=\"appended\" offset=\"" << offset << "\"/>\n";
+               " format=\"appended\" offset=\""
+            << offset << "\"/>\n";
         vtu << tag.str();
-        metas.push_back({"", static_cast<uint32_t>(num_nodes * 3 * sizeof(double)),
+        metas.push_back({"",
+                         static_cast<uint32_t>(num_nodes * 3 * sizeof(double)),
                          reinterpret_cast<const char*>(pts.data())});
         offset += 4 + static_cast<uint32_t>(num_nodes * 3 * sizeof(double));
       }
@@ -727,9 +764,9 @@ void StandaloneExporter::WriteDiffusionStepVtu() {
       };
       add_cell_arr("Int32", "connectivity", conn.data(),
                    conn.size() * sizeof(int32_t));
-      add_cell_arr("Int32", "offsets",      offs.data(),
+      add_cell_arr("Int32", "offsets", offs.data(),
                    offs.size() * sizeof(int32_t));
-      add_cell_arr("UInt8", "types",        types.data(),
+      add_cell_arr("UInt8", "types", types.data(),
                    types.size() * sizeof(uint8_t));
       vtu << "      </Cells>\n";
 
@@ -756,9 +793,10 @@ void StandaloneExporter::WriteDiffusionStepVtu() {
 ///
 /// Lists all piece files and mirrors the CellData schema so that ParaView
 /// can discover available fields without loading every piece.
-void StandaloneExporter::WriteDiffusionVtuIndex(
-    const std::string& name, bool has_concentration, bool has_gradient,
-    int pieces) const {
+void StandaloneExporter::WriteDiffusionVtuIndex(const std::string& name,
+                                                bool has_concentration,
+                                                bool has_gradient,
+                                                int pieces) const {
   const char* rt = (sizeof(real_t) == 4) ? "Float32" : "Float64";
 
   std::ostringstream pvtu_name;
@@ -784,8 +822,8 @@ void StandaloneExporter::WriteDiffusionVtuIndex(
   pvtu << "    </PPoints>\n";
 
   for (int i = 0; i < pieces; ++i)
-    pvtu << "    <Piece Source=\"diffusion_" << name << "_" << step_
-         << "_p" << i << ".vtu\"/>\n";
+    pvtu << "    <Piece Source=\"diffusion_" << name << "_" << step_ << "_p"
+         << i << ".vtu\"/>\n";
 
   pvtu << "  </PUnstructuredGrid>\n</VTKFile>\n";
   pvtu.close();
