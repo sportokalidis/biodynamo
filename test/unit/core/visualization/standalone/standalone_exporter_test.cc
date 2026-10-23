@@ -62,6 +62,20 @@ std::size_t CountFilesWithPrefix(const std::string& dir,
   return count;
 }
 
+// Counts "agents_<N>.pvtu" index files in `dir`: one per successful
+// StandaloneExporter::WriteStep() call, regardless of how many per-thread
+// "agents_<N>_p<P>.vtu" piece files that call also produced.
+std::size_t CountAgentsPvtuFiles(const std::string& dir) {
+  std::size_t count = 0;
+  for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+    const std::string name = entry.path().filename().string();
+    if (name.rfind("agents_", 0) == 0 && entry.path().extension() == ".pvtu") {
+      count++;
+    }
+  }
+  return count;
+}
+
 std::string ReadFile(const std::string& path) {
   std::ifstream ifs(path);
   std::ostringstream ss;
@@ -221,7 +235,7 @@ TEST(StandaloneAdaptorTest, VisualizeHonorsExportGate) {
   StandaloneAdaptor adaptor;
   adaptor.Visualize();  // lazy-init only; export disabled -> no write
   EXPECT_TRUE(std::filesystem::exists(viz_dir));
-  EXPECT_EQ(0u, CountFilesWithPrefix(viz_dir, "agents_"));
+  EXPECT_EQ(0u, CountAgentsPvtuFiles(viz_dir));
 
   sim.GetScheduler()->Simulate(1);  // GetSimulatedSteps() -> 1
   sim.GetScheduler()->Simulate(1);  // GetSimulatedSteps() -> 2
@@ -230,15 +244,15 @@ TEST(StandaloneAdaptorTest, VisualizeHonorsExportGate) {
   param->visualization_interval = 2;
 
   adaptor.Visualize();  // step 2, 2 % 2 == 0 -> writes
-  EXPECT_EQ(1u, CountFilesWithPrefix(viz_dir, "agents_"));
+  EXPECT_EQ(1u, CountAgentsPvtuFiles(viz_dir));
 
   sim.GetScheduler()->Simulate(1);  // -> 3
   adaptor.Visualize();              // 3 % 2 != 0 -> no write
-  EXPECT_EQ(1u, CountFilesWithPrefix(viz_dir, "agents_"));
+  EXPECT_EQ(1u, CountAgentsPvtuFiles(viz_dir));
 
   sim.GetScheduler()->Simulate(1);  // -> 4
   adaptor.Visualize();              // 4 % 2 == 0 -> writes
-  EXPECT_EQ(2u, CountFilesWithPrefix(viz_dir, "agents_"));
+  EXPECT_EQ(2u, CountAgentsPvtuFiles(viz_dir));
 }
 
 }  // namespace bdm
