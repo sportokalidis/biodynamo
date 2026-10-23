@@ -193,6 +193,9 @@ TEST(StandaloneExporterTest, WriteDiffusionStepCreatesExpectedFiles) {
     param->visualize_diffusion.push_back(vd);
   };
   Simulation sim(TEST_NAME, set_param);
+  // DiffusionGrid::Initialize() reads its bounds from the environment, which
+  // only has a valid world box after at least one Update() call.
+  sim.GetEnvironment()->Update();
   std::string viz_dir = FreshVizDir(&sim);
   auto* rm = sim.GetResourceManager();
 
