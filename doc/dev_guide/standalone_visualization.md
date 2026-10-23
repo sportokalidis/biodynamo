@@ -480,7 +480,7 @@ void StandaloneExporter::WriteStep() {
     extra_vals[f].resize(n);
     for (size_t i = 0; i < n; ++i) {
       double val = 0.0;
-      ReadScalarMember(agents[i], extra_members_[f], val);
+      ReadScalarMember(agents[i], extra_members_[f], &val);
       extra_vals[f][i] = val;
     }
   }
@@ -604,7 +604,7 @@ static std::vector<std::string> LoadAdditionalMembers() {
 
 ```cpp
 static bool ReadScalarMember(const Agent* agent,
-                              const std::string& name, double& out) {
+                              const std::string& name, double* out) {
   // TClass::GetClass(typeid(*agent)) returns ROOT's reflection descriptor
   // for the actual runtime type (e.g. "MyCell"), not the base class.
   TClass*      cls = TClass::GetClass(typeid(*agent));
@@ -616,8 +616,8 @@ static bool ReadScalarMember(const Agent* agent,
 
   // Read the raw bytes at that offset as the correct numeric type and
   // convert to double for storage in the VTU file.
-  if (tname == "double")  { out = *reinterpret_cast<const double*>(addr); }
-  if (tname == "float")   { out = *reinterpret_cast<const float*>(addr);  }
+  if (tname == "double")  { *out = *reinterpret_cast<const double*>(addr); }
+  if (tname == "float")   { *out = *reinterpret_cast<const float*>(addr);  }
   // ...
 }
 ```
@@ -846,6 +846,12 @@ output/{simulation_name}/viz/
 
 To open in ParaView: **File → Open** the `.pvtu` files for agents and the `.pvti` files for diffusion. ParaView will automatically load all referenced piece files. Use the `Colour by` dropdown to select `Substance Concentration` or `Diffusion Gradient`. To volume-render the diffusion, change `Representation` from `Surface` to `Volume`.
 
+The CLI's `bdm view` command is not usable for this workflow: it looks for a
+local ParaView install under `$BDMSYS/third_party/paraview`, which a
+`standalone_visualization=ON` build never has. Copy the output directory to
+any machine with ParaView (or another VTK-XML-compatible viewer) and open
+the files there instead.
+
 ---
 
 ## 9. How to Build and Enable
@@ -854,7 +860,6 @@ To open in ParaView: **File → Open** the `.pvtu` files for agents and the `.pv
 # Standalone exporter (no ParaView needed):
 cmake -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -Dparaview=OFF \
       -Dstandalone_visualization=ON \
       -B build
 cmake --build build --parallel
@@ -863,6 +868,12 @@ cmake --build build --parallel
 source build/bin/thisbdm.sh
 ```
 
+`standalone_visualization=ON` always forces `paraview=OFF` (CMakeLists.txt
+sets this automatically): both adaptors build a CMake target with the same
+name, `VisualizationAdaptor`, so having both `ON` at once would fail
+configuration with a duplicate-target error. Passing `-Dparaview=OFF`
+explicitly alongside it is harmless but no longer required.
+
 To build with ParaView (the default, unchanged path):
 
 ```bash
@@ -870,7 +881,6 @@ cmake -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -Dparaview=ON \
       -B build-paraview
-# Note: -Dstandalone_visualization must NOT be ON when using paraview
 ```
 
 ---

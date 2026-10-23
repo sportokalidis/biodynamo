@@ -15,11 +15,11 @@ Benchmark using the **soma_clustering** demo on the `paraview-exporter-opt` bran
 
 | | Standalone | ParaView |
 |---|---|---|
-| CMake flags | `-Dparaview=OFF -Dstandalone_visualization=ON` | `-Dparaview=ON -Dstandalone_visualization=OFF` |
+| CMake flags | `-Dstandalone_visualization=ON` (forces `paraview=OFF`) | `-Dparaview=ON` (default) |
 | Build directory | `build/` | `build-paraview/` |
 | Shared library produced | `libVisualizationAdaptor.so` | `libVisualizationAdaptor.so` |
 | VTK/ParaView dependency | None | ~500 MB ParaView install |
-| `bdm.toml` adaptor key | `adaptor = "standalone"` | `adaptor = "paraview"` (or omit — default) |
+| `bdm.toml` adaptor key | `adaptor = "standalone"` (or omit — default for this build) | `adaptor = "paraview"` (or omit — default for this build) |
 
 ---
 
