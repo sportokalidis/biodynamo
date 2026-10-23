@@ -235,4 +235,6 @@ jobs:
       shell: bash
       run: |
         . build/bin/thisbdm.sh
+        sudo git config --system user.name "Test User"
+        sudo git config --system user.email user@test.com
         test/system/standalone_visualization.sh
