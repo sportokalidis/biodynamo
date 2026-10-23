@@ -16,9 +16,11 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <regex>
 #include <sstream>
 #include <string>
+#include <typeinfo>
 #include <vector>
 
 #include "core/agent/cell.h"
@@ -32,6 +34,7 @@
 #include "core/util/string.h"
 #include "core/visualization/standalone/adaptor.h"
 #include "core/visualization/standalone/standalone_exporter.h"
+#include "core/visualization/visualization_adaptor.h"
 #include "unit/core/visualization/standalone/standalone_exporter_test.h"
 #include "unit/test_util/test_util.h"
 
@@ -105,6 +108,33 @@ std::size_t SumNumberOfPoints(const std::string& dir,
 }
 
 }  // namespace
+
+// -----------------------------------------------------------------------------
+/// All other tests in this file construct StandaloneExporter/StandaloneAdaptor
+/// directly, bypassing the mechanism a real bdm.toml-configured simulation
+/// actually uses: VisualizationAdaptor::Create("standalone") resolves a ROOT
+/// TPluginManager handler, dlopen()s libVisualizationAdaptor.so and calls
+/// StandaloneAdaptor::Factory(). This test exercises that path instead, the
+/// same way VisualizationAdaptorDeathTest.MissingParaviewHandler in
+/// paraview/adaptor_test.cc exercises it for the ParaView adaptor.
+/// Run in a fresh process: VisualizationAdaptor::Create() caches the loaded
+/// handler in a process-lifetime static map, so a clean process is needed to
+/// observe the handler being resolved for the first time.
+TEST(VisualizationAdaptorDeathTest, CreateStandaloneHandler) {
+  ASSERT_EXIT(
+      {
+        Param* param = nullptr;
+        Simulation sim(TEST_NAME, [&](Param* p) { param = p; });
+        param->export_visualization = true;
+
+        std::unique_ptr<VisualizationAdaptor> adaptor(
+            VisualizationAdaptor::Create("standalone"));
+        bool ok =
+            adaptor != nullptr && typeid(*adaptor) == typeid(StandaloneAdaptor);
+        std::exit(ok ? 0 : 1);
+      },
+      ::testing::ExitedWithCode(0), "");
+}
 
 // -----------------------------------------------------------------------------
 TEST(StandaloneExporterTest, WriteStepCreatesExpectedFiles) {
