@@ -230,3 +230,9 @@ jobs:
         . bin/thisbdm.sh
         bdm config
         ninja run-unit-tests
+
+    - name: System test for the standalone_visualization demo
+      shell: bash
+      run: |
+        . build/bin/thisbdm.sh
+        test/system/standalone_visualization.sh
