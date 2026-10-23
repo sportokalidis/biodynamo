@@ -231,10 +231,11 @@ jobs:
         bdm config
         ninja run-unit-tests
 
-    - name: System test for the standalone_visualization demo
+    - name: Run demos (standalone_visualization)
       shell: bash
+      working-directory: build
       run: |
-        . build/bin/thisbdm.sh
+        . bin/thisbdm.sh
         sudo git config --system user.name "Test User"
         sudo git config --system user.email user@test.com
-        test/system/standalone_visualization.sh
+        ninja run-demos
