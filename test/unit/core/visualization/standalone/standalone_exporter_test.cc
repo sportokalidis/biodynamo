@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "core/agent/cell.h"
+#include "core/environment/environment.h"
 #include "core/model_initializer.h"
 #include "core/param/param.h"
 #include "core/resource_manager.h"
