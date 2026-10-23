@@ -139,6 +139,15 @@ option(cuda      "Enable CUDA code generation for GPU acceleration" OFF)
 option(opencl    "Enable OpenCL code generation for GPU acceleration" OFF)
 option(dict      "Build with ROOT dictionaries" ON)
 option(paraview  "Enable ParaView" ON)
+option(standalone_visualization "Enable standalone VTU/PVTU exporter (no ParaView/Qt)" OFF)
+# paraview defaults to ON, so turning on standalone_visualization alone would
+# otherwise leave both plugin build paths active; they both define a
+# VisualizationAdaptor CMake target, so configuring with both ON fails with a
+# duplicate-target error. standalone_visualization always wins.
+if(standalone_visualization AND paraview)
+  message(STATUS "standalone_visualization=ON implies paraview=OFF")
+  set(paraview OFF)
+endif()
 option(notebooks "Generate BioDynaMo notebooks" OFF)
 option(numa      "Enable NUMA-awareness in BioDynaMo." ON)
 option(sbml      "Enable SBML" OFF)
@@ -281,7 +290,7 @@ if(APPLE)
 endif()
 
 # Check if GLUT is present. If we do not have it, then we disable directly paraview.
-if(paraview)
+if(paraview AND NOT standalone_visualization)
   find_package(GLUT)
   if(NOT GLUT_FOUND)
       PRINT_WARNING()
@@ -622,6 +631,9 @@ file(GLOB_RECURSE KERNELS "${CMAKE_SOURCE_DIR}/src/*.cu")
 # plugin upon request
 filter_list(LIB_SOURCES "${LIB_SOURCES}" "paraview/*")
 filter_list(HEADERS "${HEADERS}" "paraview/*")
+# Exclude standalone visualization adaptor from core lib; it's built as plugin
+filter_list(LIB_SOURCES "${LIB_SOURCES}" "standalone/*")
+filter_list(HEADERS "${HEADERS}" "standalone/*")
 
 build_shared_library(biodynamo
                    SELECTION selection-libbiodynamo.xml
@@ -665,6 +677,35 @@ endif()
 if(${VTune_FOUND})
   target_link_libraries(biodynamo ${VTUNE_LIBRARIES})
   add_definitions("-DUSE_VTUNE")
+endif()
+
+# Build standalone visualization adaptor (no ParaView/Qt dependencies)
+if(standalone_visualization)
+  message(STATUS "Building standalone visualization adaptor (ParaView disabled)")
+  file(GLOB_RECURSE SA_HEADERS "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.h")
+  file(GLOB_RECURSE SA_SOURCES "${CMAKE_SOURCE_DIR}/src/core/visualization/standalone/*.cc")
+  # Lets unit tests #ifdef-guard code that calls into StandaloneExporter /
+  # StandaloneAdaptor, exactly as USE_PARAVIEW guards the ParaviewAdaptor
+  # tests, since those symbols only exist in the build when this option is on.
+  add_definitions("-DUSE_STANDALONE_VISUALIZATION")
+
+  build_shared_library(VisualizationAdaptor
+                    SELECTION selection-libVisualizationAdaptor.xml
+                    SOURCES ${SA_SOURCES}
+                    HEADERS ${SA_HEADERS}
+                    LIBRARIES biodynamo
+                    PLUGIN "TRUE")
+  # Reuse the same variable the ParaView plugin path links into the unit test
+  # executable with, so biodynamo-unit-tests can exercise StandaloneExporter
+  # and StandaloneAdaptor directly. paraview is forced OFF above whenever
+  # standalone_visualization is ON, so this is the only value it holds here.
+  set(REQUIRED_PARAVIEW_LIBRARIES "VisualizationAdaptor")
+
+  if(LINUX)
+    SET_TARGET_PROPERTIES(VisualizationAdaptor PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
+  else()
+    SET_TARGET_PROPERTIES(VisualizationAdaptor PROPERTIES LINK_FLAGS "-dynamic")
+  endif()
 endif()
 
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1 CACHE BOOL "Suppress cmake development warnings")
@@ -736,6 +777,7 @@ if (test)
                          ${CMAKE_SOURCE_DIR}/test/unit/core/util/*.cc
                          ${CMAKE_SOURCE_DIR}/test/unit/core/visualization/*.cc
                          ${CMAKE_SOURCE_DIR}/test/unit/core/visualization/paraview/*.cc
+                         ${CMAKE_SOURCE_DIR}/test/unit/core/visualization/standalone/*.cc
                          ${CMAKE_SOURCE_DIR}/test/unit/neuroscience/*.cc)
   file(GLOB TEST_HEADERS ${CMAKE_SOURCE_DIR}/test/unit/*.h
                          ${CMAKE_SOURCE_DIR}/test/unit/test_util/*.h
@@ -753,6 +795,7 @@ if (test)
                          ${CMAKE_SOURCE_DIR}/test/unit/core/util/*.h
                          ${CMAKE_SOURCE_DIR}/test/unit/core/visualization/*.h
                          ${CMAKE_SOURCE_DIR}/test/unit/core/visualization/paraview/*.h
+                         ${CMAKE_SOURCE_DIR}/test/unit/core/visualization/standalone/*.h
                          ${CMAKE_SOURCE_DIR}/test/unit/neuroscience/*.h)
   
   bdm_add_test_executable(biodynamo-unit-tests
@@ -874,7 +917,7 @@ else()
   set(pyenvroot "")
 endif()
 set(with_paraview ON)
-if(NOT paraview)
+if(NOT paraview OR standalone_visualization)
   set(with_paraview OFF)
 endif()
 
