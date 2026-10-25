@@ -102,8 +102,41 @@ bdmlibs="-lbiodynamo"
 
 ### machine dependent settings ###
 
-# Set the C++ standard version
-cxxversionflag="-std=c++${cxxstd}"
+# Use CMake's compiler-specific spelling (older compilers use e.g. c++2b).
+cxxversionflag="@BDM_CXX_STANDARD_COMPILE_OPTION@"
+
+# The draft spelling some compilers use for the same standard, so a ROOT built
+# with -std=c++2b is accepted by a BioDynaMo built with -std=c++23.
+case "$cxxstd" in
+   17) cxxstd_draft=1z ;;
+   20) cxxstd_draft=2a ;;
+   23) cxxstd_draft=2b ;;
+   26) cxxstd_draft=2c ;;
+   *)  cxxstd_draft=$cxxstd ;;
+esac
+
+# Consumers can source a different ROOT after BioDynaMo was built. Refuse a
+# different language mode instead of letting root-config's last -std flag win.
+root_cxxflags() {
+   local flags flag found=false
+   flags=$(root-config --cflags) || return 1
+   for flag in $flags; do
+      case "$flag" in
+         -std=c++$cxxstd|-std=gnu++$cxxstd|\
+         -std=c++$cxxstd_draft|-std=gnu++$cxxstd_draft) found=true ;;
+         -std=*)
+            echo "ROOT must use C++${cxxstd}; root-config reports: $flags" >&2
+            return 1
+            ;;
+      esac
+   done
+   if [[ "$found" != true ]]; then
+      echo "ROOT must use C++${cxxstd}; root-config reports: $flags" >&2
+      return 1
+   fi
+   # Emit the language flag once, from BioDynaMo's recorded build settings.
+   printf '%s\n' "$flags" | sed -E 's/(^|[[:space:]])-std=[^[:space:]]+//g'
+}
 
 ### end of machine and compiler dependent settings ###
 
@@ -111,7 +144,7 @@ usage="\
 Usage: bdm-config [--version] [--root-version]\
  [--debug] [--opt] [--cxxflags] [--cxxincludes]\
  [--ldflags] [--libs] [--bindir] [--libdir] [--incdir]\
- [--cxx] [--ld ] [--cmakedir] [--cmake-invoke] [--config]\
+ [--cxx] [--cxx-standard] [--ld ] [--cmakedir] [--cmake-invoke] [--config]\
  [--arch] [--platform] [--ncpu] [--fp-precision] [--help]"
 
 if test $# -eq 0; then
@@ -154,20 +187,25 @@ while test $# -gt 0; do
       if test ${incdir} != /usr/include; then
          includes=-I${incdir}
       fi
-      out="$out $includes $cxxdefines $cxxversionflag $cxxflags $cxxoptflags $cxxdebflags $(root-config --cflags)"
+      rootflags=$(root_cxxflags) || exit 1
+      out="$out $includes $cxxdefines $cxxversionflag $cxxflags $cxxoptflags $cxxdebflags $rootflags"
       ;;
     --cxxincludes)
       ### Output only the include flags for BioDynaMo headers
       if test ${incdir} != /usr/include; then
          includes=-I${incdir}
       fi
-      out="$out $includes $(root-config --noauxcflags --cflags)"
+      root_cxxflags >/dev/null || exit 1
+      out="$out $includes -I$(root-config --incdir)"
       # local omp directory needed for rootcling (used in bdm-code-generation)
       out="$out -I${incdir}/../omp"
       ;;
     --cxxdefines)
       ### Output only the C++ define flags for BioDynaMo headers
       out="$out $cxxdefines"
+      ;;
+    --cxx-standard)
+      out="$out $cxxstd"
       ;;
     --ldflags)
       ### Output linker flags
@@ -271,6 +309,7 @@ while test $# -gt 0; do
       echo "  --root-version        Print the version of ROOT used to build BioDynaMo"
       echo "  --ncpu                Print number of available (hyperthreaded) cores"
       echo "  --cxx                 Print alternative C++ compiler specified when BDM was built"
+      echo "  --cxx-standard        Print the C++ language standard used to build BioDynaMo"
       echo "  --ld                  Print alternative Linker specified when BDM was built"
       echo "  --fp-precision        Print the floating-point precision that  BDM was built with"
       echo "  --help                Print this message"

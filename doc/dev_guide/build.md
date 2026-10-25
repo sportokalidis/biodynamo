@@ -17,6 +17,79 @@ keywords:
   -create
 ---
 
+## C++ standard and ROOT packages
+
+BioDynaMo's C++ standard is a property of the ROOT package it is built against,
+not a fixed value. ROOT supports C++17, 20 and 23 from one source tree and
+publishes different standards per platform and release, and its Cling
+interpreter must parse the same headers the libraries were compiled from.
+Configuration therefore reads `root-config` and adopts ROOT's language mode.
+BioDynaMo currently builds and tests **C++17 and C++23**; another mode is
+rejected with an actionable message rather than silently accepted.
+
+In practice this means Ubuntu 22.04/24.04 and older Xcode versions keep building
+in C++17 against today's packages, while platforms whose ROOT package is C++23,
+such as Xcode 26 and Ubuntu 26.04 with a C++23 ROOT, build in C++23. Nothing
+needs to be chosen by hand.
+
+Requirements: CMake 3.24 or newer, ROOT 6.22 or newer, and ROOT 6.36 or newer
+for a C++23 package, since C++23 interpreter support arrived in 6.36.
+
+The compiler and ROOT must also report the same `__cplusplus` value, not merely
+select the same standard. ROOT stores its build compiler's value in the public
+`RConfigure.h` and warns from that header whenever a consumer disagrees, so
+configuration rejects a mismatch instead of emitting that warning on every
+translation unit. This matters mainly for C++23: GCC 13 reports the provisional
+`202100L`, while GCC 14, Clang 17, and ROOT's own Cling report the final
+`202302L`. For a C++23 build prefer **GCC 14 or newer, or Clang 17 or newer**,
+with a ROOT package built by the same compiler. C++17 packages are unaffected,
+since all supported compilers agree on `201703L`.
+
+Use a fresh build directory after changing the compiler, standard, or ROOT, and
+rebuild custom simulations and dictionaries as well. Simulations that pin
+`set(CMAKE_CXX_STANDARD ...)` to something other than the standard BioDynaMo was
+built with are rejected; remove the setting and let the use-file supply it.
+`bdm-config --cxx-standard` reports the standard of an installed build.
+
+### Selecting a C++23 ROOT package
+
+Automatic downloads use the package registered for each platform in
+`cmake/utils.cmake`. To test a package that is not registered yet, pin it
+explicitly with a checksum:
+
+```bash
+cmake -S . -B build-cxx23 -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+  -DBDM_ROOT_URL=https://root.cern/download/root_v6.40.04.Linux-ubuntu26.04-x86_64-gcc15.2.tar.gz \
+  -DBDM_ROOT_SHA256=cd44b56ca02e00205b00bec11e207affda0fbbcc63dfd1e5bbd17286444ed4b9
+```
+
+That CERN package is C++23 and reports the final `__cplusplus` value, matching
+Ubuntu 26.04's GCC 15.2. Note that using it currently stops at BioDynaMo's
+Python pin: `CMakeLists.txt` requires exactly the pyenv Python the reused
+Ubuntu 24.04 archives were built against, 3.9.25 on Ubuntu 26.04, whereas this
+package's PyROOT is built for Ubuntu 26.04's Python 3.14.
+
+Candidate packages are not interchangeable: ROOT 6.36.14 and 6.38.06 for Ubuntu
+26.04 are C++17, as is 6.40.04 for Ubuntu 24.04. Check `include/RConfigure.h`
+and `root-config --features` of any candidate rather than relying on its release
+number. The [migration plan](cxx23_migration.md) and
+[implementation log](cxx23_migration_log.md) record the remaining gates.
+
+The ROOT packaging script accepts a pinned version and optional CMake flags:
+
+```bash
+# Install build dependencies first and select a compatible C++ compiler.
+# Select Python to match the ParaView/ROOT ABI used by BioDynaMo.
+BDM_ROOT_PYTHON=/path/to/python3.9 \
+  util/build-third-party/build-root.sh 6.36.06
+```
+
+The script builds under `build/build-third-party/`, checks ROOT's language mode,
+and produces an archive, SHA256 file, and build manifest. Set
+`BDM_ROOT_SOURCE_DIR` to use local sources and `BDM_ROOT_WORK_DIR` to change the
+workspace. It does not install system packages. Xcode 26.6 needs its newer
+SDK-compatible ROOT release; use the version selected in `cmake/utils.cmake`.
+
 ## First build of BioDynaMo
 
 To build BioDynaMo from source execute the following commands:
@@ -220,7 +293,7 @@ Build targets indicated with `*` always come in three different flavors.
 
 #### Use a Custom Compiler
 If you need to user a custom compilers (instead of the one automatically detected by BioDynaMo) you will need to set the variables: `CXX` for the C++ compiler and `CC` for the C compiler. 
-Please not that your custom compiler must support the C++17 standard and must be compatible with OpenMP. 
+Your custom compiler must support C++23 and be compatible with OpenMP.
 The complete procedure will become:
 
 ```bash

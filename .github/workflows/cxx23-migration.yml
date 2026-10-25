@@ -1,0 +1,97 @@
+name: C++23 migration checks
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  configuration:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, macos-14, macos-26]
+        cmake: ['3.24.3', '3.31.10']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Select CMake
+        run: python -m pip install cmake==${{ matrix.cmake }}
+      - name: Check language and ROOT configuration policy
+        run: |
+          cmake --version
+          c++ --version
+          python test/cmake/cxx23_migration_test.py --cmake "$(command -v cmake)" -v
+          cmake -P test/cmake/ubuntu-platforms.cmake
+
+  # Ubuntu 26.04 motivates this migration, and CERN publishes a C++23 ROOT for
+  # it. No hosted runner image provides 26.04 yet, so validate it in a container.
+  ubuntu-2604-root-package:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    env:
+      ROOT_ARCHIVE: root_v6.40.04.Linux-ubuntu26.04-x86_64-gcc15.2.tar.gz
+      ROOT_SHA256: cd44b56ca02e00205b00bec11e207affda0fbbcc63dfd1e5bbd17286444ed4b9
+      # ROOT's interpreter aborts without libtbb, and root-config reports paths
+      # only once the package is extracted.
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Install prerequisites
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            ca-certificates curl g++ cmake make git python3 \
+            libx11-6 libxpm4 libxft2 libxext6 libgl1 libglu1-mesa \
+            libtbb12 libssl3t64 libzstd1 liblzma5 libxxhash0
+          g++ --version | head -1
+          cmake --version | head -1
+      - uses: actions/checkout@v4
+      - name: Download and verify the published C++23 ROOT package
+        run: |
+          curl -fsSL -o "$ROOT_ARCHIVE" "https://root.cern/download/$ROOT_ARCHIVE"
+          echo "$ROOT_SHA256  $ROOT_ARCHIVE" | sha256sum --check --strict
+          mkdir -p /opt && tar -xzf "$ROOT_ARCHIVE" -C /opt
+      - name: Require ROOT, the compiler, and Cling to report the same __cplusplus
+        run: |
+          set -euo pipefail
+          printf '#include <cstdio>\nint main(){printf("%%ld\\n", __cplusplus);}\n' > probe.cc
+          compiler=$(g++ -std=c++23 probe.cc -o probe && ./probe)
+          macro=$(sed -n 's/^[[:space:]]*#[[:space:]]*define[[:space:]]\+ROOT__cplusplus[[:space:]]\+\([0-9]\+\)L\?[[:space:]]*$/\1/p' \
+            /opt/root/include/RConfigure.h)
+          # ROOT exits nonzero after -q -e, which would otherwise abort this step.
+          cling=$({ /opt/root/bin/root -l -b -q \
+            -e 'printf("%ld\n", (long)__cplusplus);' 2>/dev/null || true; } | tail -1)
+          echo "compiler=$compiler ROOT__cplusplus=$macro cling=$cling"
+          test "$compiler" = 202302 && test "$macro" = 202302 && test "$cling" = 202302
+      - name: Compiling against ROOT's headers must be warning-free
+        run: |
+          set -euo pipefail
+          . /opt/root/bin/thisroot.sh
+          printf '#include "RConfigure.h"\n#include "TROOT.h"\nint main(){return gROOT == nullptr;}\n' > headers.cc
+          g++ -std=c++23 -Wall $(root-config --cflags) headers.cc \
+            $(root-config --libs) -o headers 2> headers.warn
+          if [ -s headers.warn ]; then cat headers.warn; exit 1; fi
+          ./headers
+      - name: BioDynaMo language and ROOT policy accepts the package
+        run: |
+          set -euo pipefail
+          . /opt/root/bin/thisroot.sh
+          mkdir -p policy && cd policy
+          cat > CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.24)
+          project(Policy LANGUAGES CXX)
+          list(PREPEND CMAKE_MODULE_PATH "$ENV{GITHUB_WORKSPACE}/cmake")
+          include(CompilerStandard)
+          include(utils)
+          find_package(ROOT REQUIRED COMPONENTS Geom Gui GenVector)
+          verify_ROOT()
+          EOF
+          cmake -S . -B build

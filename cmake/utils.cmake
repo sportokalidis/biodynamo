@@ -322,31 +322,60 @@ function(fix_root_install_names ROOT_PREFIX)
     endforeach()
 endfunction()
 
+# Resolve the package registered for this platform, or an explicitly pinned
+# archive. The language mode is read from whichever package is selected rather
+# than demanded in advance, so platforms move to C++23 as their ROOT packages do.
+function(bdm_root_download out_url out_sha)
+    if(BDM_ROOT_URL OR BDM_ROOT_SHA256)
+        string(LENGTH "${BDM_ROOT_SHA256}" digest_length)
+        if(NOT BDM_ROOT_URL OR NOT digest_length EQUAL 64 OR
+           NOT BDM_ROOT_SHA256 MATCHES "^[0-9a-fA-F]+$")
+            message(FATAL_ERROR "Set both BDM_ROOT_URL and a 64-digit "
+                "BDM_ROOT_SHA256 to select a ROOT archive.")
+        endif()
+        string(TOLOWER "${BDM_ROOT_SHA256}" digest)
+        set(${out_url} "${BDM_ROOT_URL}" PARENT_SCOPE)
+        set(${out_sha} "${digest}" PARENT_SCOPE)
+        return()
+    endif()
+    bdm_root_platform(tar_file sha_key)
+    if(NOT DEFINED ${sha_key} OR "${${sha_key}}" STREQUAL "")
+        message(FATAL_ERROR "No ROOT SHA256 digest registered for '${sha_key}'.")
+    endif()
+    set(${out_url} "https://cern.ch/biodynamo-lfs/third-party/${tar_file}" PARENT_SCOPE)
+    set(${out_sha} "${${sha_key}}" PARENT_SCOPE)
+endfunction()
+
 # Try to find the ROOT package. It is an hard requirement
 # for the project. If ROOT is not found on the system, it
 # will be downloaded. If the found cached ROOT is not the right
 # version (SHA256 check with builtin expected SHA256) then
 # a new version will be downloaded.
-# If a user installed ROOT is found we will check if ROOT
-# was compiled using c++17.
+# Validate the language mode for every installation, including downloads.
 function(verify_ROOT)
+    include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/ROOTCompatibility.cmake")
     if(ROOT_FOUND AND CMAKE_THIRD_PARTY_DIR)
-        # check if found ROOT is BDM installed (matchres > -1)
-        string(FIND ${ROOT_INCLUDE_DIRS} ${CMAKE_THIRD_PARTY_DIR} matchres)
-        if (${matchres} GREATER -1)
+        # Prefix substring matches can accidentally classify an external install
+        # as managed. Only the exact managed root directory may be replaced.
+        file(REAL_PATH "${ROOTSYS}" root_real)
+        file(REAL_PATH "${CMAKE_THIRD_PARTY_DIR}/root" managed_real)
+        if(root_real STREQUAL managed_real)
+            # Check availability before removing an old managed package.
+            bdm_root_download(ROOT_URL ROOT_SHA)
             # check SHA256 of ROOT to see if it matches currently supported ROOT
             if (IS_DIRECTORY ${CMAKE_THIRD_PARTY_DIR}/root)
                 if (EXISTS ${CMAKE_THIRD_PARTY_DIR}/root/tar-sha256)
                     # check if SHA256 of installed ROOT is the same as the expected one
                     file(READ ${CMAKE_THIRD_PARTY_DIR}/root/tar-sha256 TAR_SHA256)
                     # Use the same package selection as the download path.
-                    bdm_root_platform(ROOT_TAR_FILE ROOT_SHA_KEY)
-                    set(ROOT_SHA ${${ROOT_SHA_KEY}})
+                    string(STRIP "${TAR_SHA256}" TAR_SHA256)
                     if(NOT "${TAR_SHA256}" STREQUAL "${ROOT_SHA}")
                         # BDM installed ROOT has wrong SHA256... deleting it
                         message(WARNING "The found ROOT version is not compatible... deleting it...")
                         file(REMOVE_RECURSE ${CMAKE_THIRD_PARTY_DIR}/root)
                         unset(ROOT_FOUND)
+                        unset(ROOT_CONFIG_EXECUTABLE CACHE)
+                        unset(ROOT_CONFIG_EXECUTABLE)
                     else()
                         message(STATUS "Found a compatible ROOT version in ${CMAKE_THIRD_PARTY_DIR}/root")
                     endif()
@@ -355,6 +384,8 @@ function(verify_ROOT)
                     message(WARNING "The found ROOT version cannot be determined... deleting it...")
                     file(REMOVE_RECURSE ${CMAKE_THIRD_PARTY_DIR}/root)
                     unset(ROOT_FOUND)
+                    unset(ROOT_CONFIG_EXECUTABLE CACHE)
+                    unset(ROOT_CONFIG_EXECUTABLE)
                 endif()
             endif()
         endif()
@@ -369,6 +400,11 @@ function(verify_ROOT)
         # Propagate the needed variables to the parent
         SET(ROOT_FOUND ${ROOT_FOUND} PARENT_SCOPE)
         SET(ROOT_VERSION ${ROOT_VERSION} PARENT_SCOPE)
+        SET(ROOTSYS ${ROOTSYS} PARENT_SCOPE)
+        SET(ROOT_CXX_STANDARD ${ROOT_CXX_STANDARD} PARENT_SCOPE)
+        SET(ROOT_CXX_FLAGS ${ROOT_CXX_FLAGS} PARENT_SCOPE)
+        SET(ROOT_DEFINITIONS ${ROOT_DEFINITIONS} PARENT_SCOPE)
+        SET(ROOT_USE_FILE ${ROOT_USE_FILE} PARENT_SCOPE)
         SET(ROOT_LIBRARIES ${ROOT_LIBRARIES} PARENT_SCOPE)
         SET(ROOT_LIBRARY_DIR ${ROOT_LIBRARY_DIR} PARENT_SCOPE)
         SET(ROOT_INCLUDE_DIRS ${ROOT_INCLUDE_DIRS} PARENT_SCOPE)
@@ -376,28 +412,30 @@ function(verify_ROOT)
         SET(ROOT_CONFIG_EXECUTABLE ${ROOT_CONFIG_EXECUTABLE} PARENT_SCOPE)
         SET(ROOTCLING_EXECUTABLE ${ROOTCLING_EXECUTABLE} PARENT_SCOPE)
         SET(GENREFLEX_EXECUTABLE ${GENREFLEX_EXECUTABLE} PARENT_SCOPE)
-    else()
-        # When ROOT is found, but it's not C++17 compliant, we exit the installation, because ROOT needs
-        # to be properly sourced prior to invoking CMake (CMake cannot do this for us, because it requires
-        # reverting the previous find_package() call, which is not possible.)
-        #
-        # Accept newer ROOT standards: the Xcode 26 package uses C++23.
-        # BioDynaMo stays at C++17; ROOT's standard-mismatch warning remains visible.
-        if(NOT (ROOT_cxx17_FOUND OR ROOT_cxx20_FOUND OR ROOT_cxx23_FOUND))
-          message(FATAL_ERROR "The ROOT installation found in ${ROOTSYS} is not C++17 (or newer) compliant. "
-            "Please unset ROOTSYS and re-run cmake so that a compatible version of ROOT will be downloaded.")
-        endif()
-
-        if (NOT DEFINED ROOTSYS OR NOT DEFINED ${ROOTSYS})
-          # Set ROOTSYS variable
-          string(REGEX REPLACE "/include$" "" TMP_ROOT_PATH ${ROOT_INCLUDE_DIRS})
-          set(ENV{ROOTSYS} ${TMP_ROOT_PATH})
-        endif()
     endif()
 
-    # ROOT must be 6.22 or newer
-    if("${ROOT_VERSION}" VERSION_LESS "6.22/00")
+    bdm_check_root_standard()
+    set(ENV{ROOTSYS} "${ROOTSYS}")
+
+    # Older root-config versions used a slash before the patch component.
+    string(REPLACE "/" "." root_version_normalized "${ROOT_VERSION}")
+    if("${root_version_normalized}" VERSION_LESS "6.22.00")
       message(FATAL_ERROR "The ROOT version must be 6.22 or newer, current version is ${ROOT_VERSION}")
+    endif()
+    # ROOT gained C++23 interpreter support in 6.36, so a package reporting
+    # C++23 from an older release cannot be trusted.
+    if("${ROOT_CXX_STANDARD}" STREQUAL "23" AND
+       "${root_version_normalized}" VERSION_LESS "6.36.00")
+      message(FATAL_ERROR "ROOT ${ROOT_VERSION} reports C++23, but C++23 "
+        "interpreter support requires ROOT 6.36 or newer.")
+    endif()
+
+    # Agreeing on the standard is not sufficient; the reported value of
+    # __cplusplus must agree as well. The main build applies its standard after
+    # this call and runs that check itself, so only check here once it is known.
+    # Configuration-only tests run without a C++ compiler.
+    if(CMAKE_CXX_COMPILER_LOADED AND DEFINED BDM_CXX_STANDARD)
+      bdm_check_root_cplusplus_macro()
     endif()
 endfunction()
 
@@ -427,6 +465,8 @@ function(BuildParaViewPlugin)
     OUTPUT ${CMAKE_INSTALL_PVPLUGINDIR}/BDMGlyphFilter.so ${CMAKE_INSTALL_ROOT}/lib/libBDM.${PLUG_LIB_XTENSION}
     WORKING_DIRECTORY ${CMAKE_BDM_PVPLUGINDIR}
     COMMAND ${LAUNCHER} ${CMAKE_COMMAND} -B "${BDM_PVPLUGIN_BUILDDIR}" -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
+      -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+      -DCMAKE_CXX_STANDARD=${BDM_CXX_STANDARD}
     COMMAND ${LAUNCHER} ${CMAKE_COMMAND} --build "${BDM_PVPLUGIN_BUILDDIR}"
     COMMAND ${CMAKE_COMMAND} -E copy "${BDM_PVPLUGIN_BUILDDIR}/lib/paraview-${CMAKE_BDM_PVVERSION}/plugins/BDMGlyphFilter/BDMGlyphFilter.so" "${CMAKE_INSTALL_PVPLUGINDIR}"
     COMMAND ${CMAKE_COMMAND} -E copy "${BDM_PVPLUGIN_BUILDDIR}/lib/paraview-${CMAKE_BDM_PVVERSION}/plugins/BDMGlyphFilter/libBDM.${PLUG_LIB_XTENSION}" "${CMAKE_INSTALL_ROOT}/lib"
@@ -541,6 +581,8 @@ function(install_inside_build)
             ${CMAKE_SOURCE_DIR}/cmake/BioDynaMoConfig.cmake
             ${CMAKE_SOURCE_DIR}/cmake/BioDynaMo.cmake
             ${CMAKE_SOURCE_DIR}/cmake/SetCompilerFlags.cmake
+            ${CMAKE_SOURCE_DIR}/cmake/CompilerStandard.cmake
+            ${CMAKE_SOURCE_DIR}/cmake/ROOTCompatibility.cmake
             ${CMAKE_SOURCE_DIR}/cmake/FindLibroadrunner.cmake
             ${CMAKE_SOURCE_DIR}/cmake/FindROOT.cmake
             ${CMAKE_SOURCE_DIR}/cmake/FindVTune.cmake
@@ -792,43 +834,37 @@ function(download_verify_extract URL DEST HASH)
   get_filename_component(DEST_PARENT "${DEST}/.." ABSOLUTE)
   set(FULL_TAR_PATH "${DEST_PARENT}/${TAR_FILENAME}")
 
-  if(DEFINED ENV{BDM_LOCAL_LFS})
-    # If the user has set a directory for local LFS, try to find the tar there.
-    execute_process(COMMAND echo ${URL}
-                    COMMAND sed "s|\\(.*://[^/]*/\\)\\(.*\\)|\\1;\\2|g"
-                    OUTPUT_VARIABLE URL_COMPONENTS
-                    OUTPUT_STRIP_TRAILING_WHITESPACE)
-    list(GET URL_COMPONENTS 1 URL_FILEPATH)
-    string(REPLACE "biodynamo-lfs" "" LFS_FILEPATH ${URL_FILEPATH})
-    set(LOCAL_TAR_FILE "$ENV{BDM_LOCAL_LFS}${LFS_FILEPATH}")
-    if(EXISTS "${LOCAL_TAR_FILE}")
-      file(COPY ${LOCAL_TAR_FILE} DESTINATION ${DEST_PARENT})
-    else()
-      message(FATAL_ERROR "\nERROR: We were unable find file '${LOCAL_TAR_FILE}'.\n\
-Unset the environment variable BDM_LOCAL_LFS to download the file.")
+  if(DEFINED ENV{BDM_LOCAL_LFS} AND URL MATCHES "^https?://")
+    # Resolve the mirror first, then use the same verification/extraction path
+    # as remote archives. A copied archive alone is not an installed package.
+    string(REGEX REPLACE "^https?://[^/]+/" "" URL_FILEPATH "${URL}")
+    string(REGEX REPLACE "^biodynamo-lfs/" "" LFS_FILEPATH "${URL_FILEPATH}")
+    set(LOCAL_TAR_FILE "$ENV{BDM_LOCAL_LFS}/${LFS_FILEPATH}")
+    if(NOT EXISTS "${LOCAL_TAR_FILE}")
+      message(FATAL_ERROR "Cannot find '${LOCAL_TAR_FILE}'. Unset BDM_LOCAL_LFS "
+        "to download the archive.")
     endif()
-  else()
-    # Download the file
-    include(FetchContent)
-    Set(FETCHCONTENT_QUIET FALSE)
-    FetchContent_Declare(
-        ${TAR_FILENAME}
-        URL ${URL}
-	URL_HASH SHA256=${HASH}
-	DOWNLOAD_DIR ${DEST_PARENT}
-	SOURCE_DIR ${DEST}
-    )
-
-    FetchContent_MakeAvailable(${TAR_FILENAME})
-
-    # Remove subbuild files, we don't need them
-    file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/_deps/)
+    set(URL "${LOCAL_TAR_FILE}")
   endif()
 
-  file(WRITE ${DEST}/tar-sha256 "${HASH}")
+  include(FetchContent)
+  set(FETCHCONTENT_QUIET FALSE)
+  FetchContent_Declare(
+    ${TAR_FILENAME}
+    URL "${URL}"
+    URL_HASH SHA256=${HASH}
+    DOWNLOAD_DIR "${DEST_PARENT}"
+    SOURCE_DIR "${DEST}"
+  )
+  FetchContent_MakeAvailable(${TAR_FILENAME})
 
-  # remove tar file
-  file(REMOVE ${FULL_TAR_PATH})
+  # Remove subbuild files, but never remove a user-provided local archive.
+  file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/_deps/")
+  file(WRITE "${DEST}/tar-sha256" "${HASH}")
+  if(URL MATCHES "^https?://")
+    file(REMOVE "${FULL_TAR_PATH}")
+  endif()
+
 endfunction()
 
 # Helper function to print a simple line

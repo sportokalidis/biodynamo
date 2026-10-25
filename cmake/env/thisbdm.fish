@@ -310,7 +310,9 @@ function source_thisbdm
         "$BDM_ROOT_DIR"/bin/root -l -e 'cout << "Loading BioDynaMo into ROOT..." << endl; gROOT->LoadMacro("'"$BDMSYS"'/etc/rootlogon.C");' $argv
     end
     funcsave __bdm_root
-    . "$BDM_ROOT_DIR/bin/thisroot.fish"
+    . "$BDM_ROOT_DIR/bin/thisroot.fish"; or return 1
+    # Validate a ROOT selected after this BioDynaMo installation was built.
+    "$BDMSYS/bin/bdm-config" --cxxincludes >/dev/null; or return 1
     ########
 
     #### ParaView Specific Configurations ####
@@ -480,7 +482,9 @@ end
 
 if source_thisbdm
     _bdm_ok "[OK] You have successfully sourced BioDynaMo's environment."
+    _thisbdm_cleanup
 else
     _bdm_err "[ERR] BioDynaMo's environment could not be sourced."
+    _thisbdm_cleanup
+    return 1
 end
-_thisbdm_cleanup

@@ -25,7 +25,7 @@ From:ubuntu:20.04
     libbz2-dev libnuma-dev libomp5 libomp-dev libopenmpi-dev libpthread-stubs0-dev zlib1g-dev libbz2-dev libffi-dev liblzma-dev libreadline-dev libsqlite3-dev libssl-dev python-openssl tk-dev \
     xz-utils zlib1g-dev sudo libblas-dev liblapack-dev nano locales locales-all ninja-build python3-pip freeglut3-dev valgrind xvfb
   
-  CMAKE_VER=3.19.3
+  CMAKE_VER=3.31.10
   CMAKE_SH="cmake-${CMAKE_VER}-linux-x86_64.sh"
   curl -L -O  https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/${CMAKE_SH}
   bash "${CMAKE_SH}" --prefix=/usr/local --skip-license

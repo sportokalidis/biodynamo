@@ -27,10 +27,10 @@ set -e -x
 SCRIPTPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Install the prerequisites
-. ${SCRIPTPATH}/util/build-third-party/third-party-prerequisites.sh
+. ${SCRIPTPATH}/third-party-prerequisites.sh
 
 # Software versions
-ROOT_VERSION=6.26.10
+ROOT_VERSION=${BDM_ROOT_VERSION:-6.36.06}
 ROADRUNNER_VERSION=release
 
 # root

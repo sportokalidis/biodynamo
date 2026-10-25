@@ -14,17 +14,7 @@
 
 # This file sets all compiler flags
 
-# check if compiler supports C++17
-include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag("-std=c++17" COMPILER_SUPPORTS_CXX17)
-if(NOT COMPILER_SUPPORTS_CXX17)
-  message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++17 support. Please use a different C++ compiler.")
-endif()
-# Keep BioDynaMo at C++17 even when ROOT uses a newer standard.
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# turn off compiler specific extensions e.g. gnu++17
-set(CMAKE_CXX_EXTENSIONS OFF)
+include("${CMAKE_CURRENT_LIST_DIR}/CompilerStandard.cmake")
 
 # get machine architecture
 execute_process(COMMAND arch OUTPUT_VARIABLE DISTRO_ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)

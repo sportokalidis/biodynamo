@@ -425,6 +425,9 @@ _source_thisbdm()
   export BDM_ROOT_DIR
   # shellcheck disable=SC1090
   . "${BDM_ROOT_DIR}"/bin/thisroot.sh || return 1
+  # A different ROOT may have been selected since BioDynaMo was built. Apply
+  # the same language check used by Makefile consumers before running binaries.
+  "${BDMSYS}/bin/bdm-config" --cxxincludes >/dev/null || return 1
   _bdm_define_command root || return 1
   ########
 

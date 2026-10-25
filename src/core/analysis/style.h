@@ -16,6 +16,7 @@
 #define CORE_ANALYSIS_STYLE_H_
 
 #include "TStyle.h"
+#include "core/util/root.h"
 
 namespace bdm {
 namespace experimental {
@@ -160,7 +161,7 @@ class Style : public TNamed,
   void ToTStyle() const;
   void FromTStyle(TStyle* style);
 
-  ClassDefNV(Style, 1);
+  BDM_CLASS_DEF_NV(Style, 1);
 };
 
 }  // namespace experimental

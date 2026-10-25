@@ -1,105 +1,75 @@
-# - Finds ROOT installation
-# This module sets up ROOT information
-# It defines:
-# ROOT_FOUND             If the ROOT is found
-# ROOT_INCLUDE_DIR       PATH to the include directory
-# ROOT_INCLUDE_DIRS      PATH to the include directories (not cached)
-# ROOT_LIBRARIES         Most common libraries
-# ROOT_<name>_LIBRARY    Full path to the library <name>
-# ROOT_LIBRARY_DIR       PATH to the library directory
-# ROOT_ETC_DIR           PATH to the etc directory
-# ROOT_DEFINITIONS       Compiler definitions
-# ROOT_CXX_FLAGS         Compiler flags to be used by client packages
-# ROOT_C_FLAGS           Compiler flags to be used by client packages
-# ROOT_EXE_LINKER_FLAGS  Linker flags to be used by client packages
-#
-# Updated by K. Smith (ksmith37@nd.edu) to properly handle
-#  dependencies in ROOT_GENERATE_DICTIONARY
+# Find one coherent ROOT installation. All metadata and tools must come from
+# its root-config; mixing cached libraries or PATH tools breaks dictionaries.
+include("${CMAKE_CURRENT_LIST_DIR}/ROOTCompatibility.cmake")
+include(FindPackageHandleStandardArgs)
+include(CMakeParseArguments)
 
 find_program(ROOT_CONFIG_EXECUTABLE NAMES root-config
   HINTS "$ENV{ROOTSYS}/bin" "$ENV{BDM_ROOT_DIR}/bin" "${CMAKE_THIRD_PARTY_DIR}/root/bin")
-
-execute_process(
-    COMMAND ${ROOT_CONFIG_EXECUTABLE} --prefix
-    OUTPUT_VARIABLE ROOTSYS
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-    COMMAND ${ROOT_CONFIG_EXECUTABLE} --version
-    OUTPUT_VARIABLE ROOT_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-    COMMAND ${ROOT_CONFIG_EXECUTABLE} --incdir
-    OUTPUT_VARIABLE ROOT_INCLUDE_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(ROOT_INCLUDE_DIRS ${ROOT_INCLUDE_DIR})
-
-execute_process(
-    COMMAND ${ROOT_CONFIG_EXECUTABLE} --etcdir
-    OUTPUT_VARIABLE ROOT_ETC_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(ROOT_ETC_DIRS ${ROOT_ETC_DIR})
-
-execute_process(
-    COMMAND ${ROOT_CONFIG_EXECUTABLE} --libdir
-    OUTPUT_VARIABLE ROOT_LIBRARY_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(ROOT_LIBRARY_DIRS ${ROOT_LIBRARY_DIR})
-
-set(rootlibs Core RIO Net Hist Graf Graf3d Gpad Tree Rint Postscript Matrix Physics MathCore Thread MultiProc Imt)
-set(ROOT_LIBRARIES)
-foreach(_cpt ${rootlibs} ${ROOT_FIND_COMPONENTS})
-    find_library(ROOT_${_cpt}_LIBRARY ${_cpt} HINTS ${ROOT_LIBRARY_DIR})
-  if(ROOT_${_cpt}_LIBRARY)
-    mark_as_advanced(ROOT_${_cpt}_LIBRARY)
-    list(APPEND ROOT_LIBRARIES ${ROOT_${_cpt}_LIBRARY})
-    if(ROOT_FIND_COMPONENTS)
-      list(REMOVE_ITEM ROOT_FIND_COMPONENTS ${_cpt})
-    endif()
-  endif()
-endforeach()
-if(ROOT_LIBRARIES)
-  list(REMOVE_DUPLICATES ROOT_LIBRARIES)
+if(NOT ROOT_CONFIG_EXECUTABLE)
+  find_package_handle_standard_args(ROOT REQUIRED_VARS ROOT_CONFIG_EXECUTABLE)
+  return()
 endif()
 
-execute_process(
-    COMMAND ${ROOT_CONFIG_EXECUTABLE} --cflags
-    OUTPUT_VARIABLE __cflags
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(REGEX MATCHALL "-(D|U)[^ ]*" ROOT_DEFINITIONS "${__cflags}")
-string(REGEX REPLACE "(^|[ ]*)-I[^ ]*" "" ROOT_CXX_FLAGS "${__cflags}")
-string(REGEX REPLACE "(^|[ ]*)-I[^ ]*" "" ROOT_C_FLAGS "${__cflags}")
+bdm_root_query(--prefix ROOTSYS)
+bdm_root_query(--version ROOT_VERSION)
+bdm_root_query(--incdir ROOT_INCLUDE_DIR)
+bdm_root_query(--etcdir ROOT_ETC_DIR)
+bdm_root_query(--libdir ROOT_LIBRARY_DIR)
+bdm_root_query(--cflags ROOT_CXX_FLAGS)
+bdm_root_query(--ldflags ROOT_EXE_LINKER_FLAGS)
+bdm_root_query(--features _root_features)
+bdm_root_standard_from_metadata("${ROOT_CXX_FLAGS}" "${_root_features}" ROOT_CXX_STANDARD)
+set(ROOT_INCLUDE_DIRS "${ROOT_INCLUDE_DIR}")
+set(ROOT_ETC_DIRS "${ROOT_ETC_DIR}")
+set(ROOT_LIBRARY_DIRS "${ROOT_LIBRARY_DIR}")
+string(REGEX MATCHALL "-(D|U)[^ ]*" ROOT_DEFINITIONS "${ROOT_CXX_FLAGS}")
+# C compiler invocations must not receive ROOT's C++ language flag.
+string(REGEX REPLACE "-std=[^ ]+" "" ROOT_C_FLAGS "${ROOT_CXX_FLAGS}")
+set(ROOT_USE_FILE "${CMAKE_CURRENT_LIST_DIR}/RootUseFile.cmake")
 
-execute_process(
-    COMMAND ${ROOT_CONFIG_EXECUTABLE} --ldflags
-    OUTPUT_VARIABLE __ldflags
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(ROOT_EXE_LINKER_FLAGS "${__ldflags}")
-
-set(ROOT_USE_FILE ${CMAKE_CURRENT_LIST_DIR}/RootUseFile.cmake)
-
-execute_process(
-  COMMAND ${ROOT_CONFIG_EXECUTABLE} --features
-  OUTPUT_VARIABLE _root_options
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-separate_arguments(_root_options)
-foreach(_opt ${_root_options})
+# A second discovery must not inherit language features from the old package.
+foreach(_opt IN LISTS _root_options)
+  unset(ROOT_${_opt}_FOUND)
+endforeach()
+foreach(_std 11 14 17 20 23 26)
+  set(ROOT_cxx${_std}_FOUND FALSE)
+endforeach()
+separate_arguments(_root_options UNIX_COMMAND "${_root_features}")
+foreach(_opt IN LISTS _root_options)
   set(ROOT_${_opt}_FOUND TRUE)
 endforeach()
 
-include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(ROOT DEFAULT_MSG ROOT_CONFIG_EXECUTABLE
-    ROOTSYS ROOT_VERSION ROOT_INCLUDE_DIR ROOT_LIBRARIES ROOT_LIBRARY_DIR)
+set(rootlibs Core RIO Net Hist Graf Graf3d Gpad Tree Rint Postscript Matrix Physics MathCore Thread MultiProc Imt)
+list(APPEND rootlibs ${ROOT_FIND_COMPONENTS})
+list(REMOVE_DUPLICATES rootlibs)
+set(ROOT_LIBRARIES)
+foreach(_cpt IN LISTS rootlibs)
+  unset(ROOT_${_cpt}_LIBRARY CACHE)
+  unset(ROOT_${_cpt}_LIBRARY)
+  find_library(ROOT_${_cpt}_LIBRARY NAMES ${_cpt}
+    PATHS "${ROOT_LIBRARY_DIR}" NO_DEFAULT_PATH)
+  set(ROOT_${_cpt}_FOUND FALSE)
+  if(ROOT_${_cpt}_LIBRARY)
+    set(ROOT_${_cpt}_FOUND TRUE)
+    list(APPEND ROOT_LIBRARIES "${ROOT_${_cpt}_LIBRARY}")
+    mark_as_advanced(ROOT_${_cpt}_LIBRARY)
+  endif()
+endforeach()
 
-mark_as_advanced(ROOT_CONFIG_EXECUTABLE)
-
-include(CMakeParseArguments)
-find_program(ROOTCLING_EXECUTABLE rootcling
-  HINTS "$ENV{ROOTSYS}/bin" "$ENV{BDM_ROOT_DIR}/bin" "${CMAKE_THIRD_PARTY_DIR}/root/bin")
-find_program(GENREFLEX_EXECUTABLE genreflex
-  HINTS "$ENV{ROOTSYS}/bin" "$ENV{BDM_ROOT_DIR}/bin" "${CMAKE_THIRD_PARTY_DIR}/root/bin")
-#find_package(GCCXML)
+foreach(_tool ROOTCLING GENREFLEX)
+  string(TOLOWER "${_tool}" _name)
+  unset(${_tool}_EXECUTABLE CACHE)
+  unset(${_tool}_EXECUTABLE)
+  find_program(${_tool}_EXECUTABLE NAMES ${_name}
+    PATHS "${ROOTSYS}/bin" NO_DEFAULT_PATH)
+endforeach()
+find_package_handle_standard_args(ROOT
+  REQUIRED_VARS ROOT_CONFIG_EXECUTABLE ROOTSYS ROOT_INCLUDE_DIR ROOT_LIBRARY_DIR
+    ROOT_LIBRARIES ROOT_Core_LIBRARY ROOTCLING_EXECUTABLE GENREFLEX_EXECUTABLE
+    ROOT_CXX_STANDARD
+  VERSION_VAR ROOT_VERSION HANDLE_COMPONENTS)
+mark_as_advanced(ROOT_CONFIG_EXECUTABLE ROOTCLING_EXECUTABLE GENREFLEX_EXECUTABLE)
 
 # We use the launcher script to emulate a `source thisbdm.sh` call
 if(NOT BDM_OUT_OF_SOURCE)
@@ -143,6 +113,9 @@ function(ROOT_GENERATE_DICTIONARY dictionary)
     unset(linkFile CACHE)
   endforeach()
   #---call rootcling------------------------------------------
+  # ROOT's dictionary tools use their built-in language mode. They do not
+  # accept the compiler's -std= option (it is parsed as the unrelated -s).
+  bdm_check_root_standard()
   add_custom_command(OUTPUT ${dictionary}.cxx
                      OUTPUT ${dictionary}_rdict.pcm
                      COMMAND ${LAUNCHER} ${ROOTCLING_EXECUTABLE} -f ${dictionary}.cxx
@@ -197,6 +170,7 @@ function(REFLEX_GENERATE_DICTIONARY dictionary)
   #set(rootmapname ${dictionary}Dict.rootmap)
   #set(rootmapopts --rootmap=${rootmapname} --rootmap-lib=${libprefix}${dictionary}Dict)
   #---Actual command----------------------------------------
+  bdm_check_root_standard()
   add_custom_command(OUTPUT ${gensrcdict} ${rootmapname} ${dictionary}_rdict.pcm
                      COMMAND ${LAUNCHER} ${GENREFLEX_EXECUTABLE} ${headerfiles} -o ${gensrcdict} ${rootmapopts} --select=${selectionfile} --noIncludePaths
                             ${ARG_OPTIONS} ${includedirs} ${definitions}

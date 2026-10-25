@@ -4,7 +4,6 @@
 # disable all clang-analyzer* checks for now
 Checks:            -*,google-*,-google-default-arguments,readability-identifier-naming,-google-runtime-references
 HeaderFilterRegex: 'src/.*'
-AnalyzeTemporaryDtors: true
 CheckOptions:
   - key:             google-readability-braces-around-statements.ShortStatementLines
     value:           '1'

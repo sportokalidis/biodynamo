@@ -41,7 +41,7 @@ if(LLVM_BREW_PREFIX)
 endif()
 
 find_program(CLANG_TIDY_BIN
-  NAMES clang-tidy-4.0 clang-tidy-3.9 clang-tidy-3.8 clang-tidy
+  NAMES clang-tidy clang-tidy-21 clang-tidy-20 clang-tidy-19 clang-tidy-18 clang-tidy-17
   PATHS ${CLANG_TOOLS_SEARCH_PATHS}
   NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
 )
