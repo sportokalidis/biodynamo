@@ -285,12 +285,19 @@ struct Param {
 
   /// Name of the visualization engine to use for visualizaing BioDynaMo
   /// simulations\n
-  /// Default value: `"paraview"`\n
+  /// Default value: `"paraview"`, or `"standalone"` when BioDynaMo was built
+  /// with `-Dstandalone_visualization=ON` (which implies `-Dparaview=OFF`,
+  /// so a `"paraview"` default would otherwise point at a plugin library
+  /// that was never built with that adaptor in it)\n
   /// TOML config file:
   ///
   ///     [visualization]
   ///     adaptor = <name_of_adaptor>
+#ifdef USE_PARAVIEW
   std::string visualization_engine = "paraview";
+#else
+  std::string visualization_engine = "standalone";
+#endif
 
   /// Use ParaView Catalyst for insitu visualization.\n
   /// Insitu visualization supports live visualization

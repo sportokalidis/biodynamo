@@ -2,8 +2,6 @@ curl
 freeglut3-dev
 g++
 gcc
-g++-11
-gcc-11
 git
 libblas-dev
 libbz2-dev

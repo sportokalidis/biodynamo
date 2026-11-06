@@ -28,6 +28,15 @@ set -e -x
 
 source $(dirname "$BASH_SOURCE[0]")/util.inc
 
+# PVSM files are ParaView state files: they are only ever produced when this
+# BioDynaMo installation was built with ParaView. Skip the PVSM-producing
+# check below entirely for a ParaView-less build (e.g.
+# -Dstandalone_visualization=ON), since no demo could ever satisfy it there.
+set +e
+bdm-config --cxxdefines | grep -q "USE_PARAVIEW"
+HAS_PARAVIEW=$?
+set -e
+
 # Counter to keep track of the number of tests that produce a PVSM file
 PVSMCounter=0
 
@@ -52,12 +61,15 @@ do
   fi
 done
 
-# Check if any of the demos produced a PVSM file, if not exit with `1`
-if [ $PVSMCounter -eq 0 ]; then
-  echo "No PVSM file was produced by any of the demos"
-  exit 1
-else
-  echo "A total of $PVSMCounter PVSM files were produced by the demos"
+# Check if any of the demos produced a PVSM file, if not exit with `1`.
+# Only applies to a ParaView build; see the HAS_PARAVIEW check above.
+if [ $HAS_PARAVIEW -eq 0 ]; then
+  if [ $PVSMCounter -eq 0 ]; then
+    echo "No PVSM file was produced by any of the demos"
+    exit 1
+  else
+    echo "A total of $PVSMCounter PVSM files were produced by the demos"
+  fi
 fi
 
 # Do the same for directories in test/system.

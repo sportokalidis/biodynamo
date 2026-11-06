@@ -509,11 +509,24 @@ function(install_inside_build)
             EXCLUDE "biodynamo.py"
             )
 
-    # Copy etc files
+    # Copy etc files. Exclude whichever VisualizationAdaptor plugin registration
+    # macro doesn't match this build: it registers a ROOT plugin handler that
+    # points at a class (ParaviewAdaptor/StandaloneAdaptor) the actually-built
+    # libVisualizationAdaptor.so doesn't contain, which otherwise fails with a
+    # confusing cling symbol-resolution error instead of a clean "plugin not
+    # found" when that handler is ever selected.
+    unset(unused_adaptor_plugins)
+    if(NOT paraview)
+      list(APPEND unused_adaptor_plugins "plugins/VisualizationAdaptor/P010_ParaviewAdaptor.C")
+    endif()
+    if(NOT standalone_visualization)
+      list(APPEND unused_adaptor_plugins "plugins/VisualizationAdaptor/P000_StandaloneAdaptor.C")
+    endif()
     add_copy_directory(copy_files_bdm
             ${CMAKE_SOURCE_DIR}/etc
             DESTINATION ${CMAKE_INSTALL_ROOT}/etc
             GLOB "*" ".*"
+            EXCLUDE ${unused_adaptor_plugins}
             )
 
     # Copy notebook files
