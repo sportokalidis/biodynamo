@@ -29,7 +29,7 @@ BDM_PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../.."
 
 # Required to add Kitware ppa below
 sudo apt-get update
-sudo apt-get install apt-transport-https
+sudo apt-get install -y apt-transport-https
 
 # Add ppa for newer CMake version
 #wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | sudo apt-key add -
