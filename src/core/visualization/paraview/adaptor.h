@@ -47,6 +47,9 @@ class ParaviewAdaptor : private VisualizationAdaptor {
   /// Visualize one timestep based on the configuration in `Param`
   void Visualize() override;
 
+  // Factory for ROOT plugin instantiation
+  static ParaviewAdaptor* Factory();
+
   struct ParaviewImpl;
 
  private:
