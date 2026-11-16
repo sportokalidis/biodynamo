@@ -54,6 +54,7 @@ jobs:
           -Dbenchmark=ON \
           -Dlibgit2=ON \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
           -B build
         cmake --build build --parallel --config Release
 
@@ -65,4 +66,13 @@ jobs:
         root --version
         root -config
         bdm config
+        bdm-config --cxx-standard
+        root-config --cflags
         ninja run-unit-tests
+
+    - name: C++23 simulation and visualization integration
+      if: matrix.os == 'macos-26'
+      shell: bash
+      run: |
+        source build/bin/thisbdm.sh
+        cmake --build build --target run-demos

@@ -1,187 +1,112 @@
 #!/bin/bash
-# -----------------------------------------------------------------------------
-#
-# Copyright (C) 2021 CERN & University of Surrey for the benefit of the
-# BioDynaMo collaboration. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-#
-# See the LICENSE file distributed with this work for details.
-# See the NOTICE file distributed with this work for additional information
-# regarding copyright ownership.
-#
-# -----------------------------------------------------------------------------
+# Copyright (C) The BioDynaMo Project.
+# Licensed under the Apache License, Version 2.0; see LICENSE and NOTICE.
+# Build a relocatable C++23 ROOT package without modifying system prerequisites.
+set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "ERROR: Wrong number of arguments.
-Description:
-  This script builds ROOT.
-  The archive will be stored in BDM_PROJECT_DIR/build/root.tar.gz
-Arguments:
-  \$1 ROOT version that should be build (e.g. v6-22-00)"
+if [[ $# -lt 1 || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Usage: $0 <ROOT version, e.g. 6.36.06> [additional CMake options...]" >&2
+  echo "Install prerequisites first. BDM_ROOT_WORK_DIR, BDM_ROOT_SOURCE_DIR," >&2
+  echo "BDM_ROOT_PYTHON, BDM_CMAKE, CC, CXX and CMAKE_BUILD_PARALLEL_LEVEL" >&2
+  echo "can select the workspace, local sources, Python, and toolchain." >&2
   exit 1
 fi
-
-set -e -x
-
 ROOT_VERSION=$1
-PYVERS=3.9.1
-
-BDM_PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../.."
-cd $BDM_PROJECT_DIR
-
-# import util functions
-. $BDM_PROJECT_DIR/util/installation/common/util.sh
-
-# archive destination dir
+shift
+BDM_PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$BDM_PROJECT_DIR/util/installation/common/util.sh"
 BDM_OS=$(DetectOs)
-DEST_DIR=$BDM_PROJECT_DIR/build/build-third-party
-mkdir -p $DEST_DIR
-EchoNewStep "Start building ROOT $ROOT_VERSION. Result will be stored in $DEST_DIR"
-# working dir
-WORKING_DIR=~/bdm-build-third-party
-mkdir -p $WORKING_DIR
-cd $WORKING_DIR
+BDM_CMAKE=${BDM_CMAKE:-cmake}
+BDM_ROOT_WORK_DIR=${BDM_ROOT_WORK_DIR:-"$BDM_PROJECT_DIR/build/build-third-party/root-$ROOT_VERSION-cxx23"}
+BDM_ROOT_PYTHON=${BDM_ROOT_PYTHON:-python3.9}
+CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL:-2}
+mkdir -p "$BDM_ROOT_WORK_DIR"
+BDM_ROOT_WORK_DIR=$(cd "$BDM_ROOT_WORK_DIR" && pwd)
+ROOT_INSTALL_DIR="$BDM_ROOT_WORK_DIR/install"
 
-ROOT_INSTALL_DIR=$WORKING_DIR/root-install
-if [ -d $ROOT_INSTALL_DIR ]; then
-  echo "ERROR: $ROOT_INSTALL_DIR exists already."
+# These defaults can be overridden explicitly for platform-specific builds.
+# Keep Python aligned with the ROOT/ParaView ABI used by BioDynaMo.
+if ! PYTHON_EXECUTABLE=$(command -v "$BDM_ROOT_PYTHON"); then
+  echo "Cannot find $BDM_ROOT_PYTHON. Set BDM_ROOT_PYTHON to the Python interpreter matching BioDynaMo's dependency ABI." >&2
   exit 1
 fi
-mkdir -p $ROOT_INSTALL_DIR
-
-# install prerequisites
-. $BDM_PROJECT_DIR/util/build-third-party/third-party-prerequisites.sh
-
-# Get the right ROOT source version, untar creates "root-$ROOT_VERSION"
-wget https://root.cern.ch/download/root_v$ROOT_VERSION.source.tar.gz
-tar -zxf root_v$ROOT_VERSION.source.tar.gz
-cd root-$ROOT_VERSION
-ROOTSRC=`pwd`
-cd ..
-
-# On macOS use brew's python
-brewpy=no
-if [[ $(uname -s) == "Darwin" ]]; then
-  brewpy=yes
-fi
-
-if [ $brewpy == "yes" ]; then
-   pyth="$(brew --prefix)/bin/python3"
+PYTHON_VERSION=$("$PYTHON_EXECUTABLE" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+if [[ -n ${BDM_ROOT_SOURCE_DIR:-} ]]; then
+  ROOTSRC=$(cd "$BDM_ROOT_SOURCE_DIR" && pwd)
 else
-   # Set Python to $PYVERS
-   if [[ $(uname -s) == "Darwin" ]]; then
-      export PYENV_ROOT=/usr/local/opt/.pyenv
-   fi
-   eval "$(pyenv init -)"
-   pyenv shell $PYVERS
-   pyth="`pyenv which python`"
+  SOURCE_ARCHIVE="$BDM_ROOT_WORK_DIR/root_v$ROOT_VERSION.source.tar.gz"
+  curl --fail --location --retry 3 \
+    "https://root.cern.ch/download/root_v$ROOT_VERSION.source.tar.gz" \
+    --output "$SOURCE_ARCHIVE"
+  mkdir -p "$BDM_ROOT_WORK_DIR/source"
+  tar -xzf "$SOURCE_ARCHIVE" -C "$BDM_ROOT_WORK_DIR/source" --strip-components=1
+  ROOTSRC="$BDM_ROOT_WORK_DIR/source"
 fi
 
-# Make sure numpy is installed for python
-#$pyth -m pip install numpy
+"$BDM_CMAKE" -S "$ROOTSRC" -B "$BDM_ROOT_WORK_DIR/build" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$ROOT_INSTALL_DIR" \
+  -DPython3_EXECUTABLE="$PYTHON_EXECUTABLE" \
+  -DPYTHON_EXECUTABLE="$PYTHON_EXECUTABLE" \
+  -Dpyroot=ON -Dgeom=ON -Dgdml=ON \
+  "$@" -DCMAKE_CXX_STANDARD=23 -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+  -DCMAKE_CXX_EXTENSIONS=OFF
+"$BDM_CMAKE" --build "$BDM_ROOT_WORK_DIR/build" --target install \
+  --parallel "$CMAKE_BUILD_PARALLEL_LEVEL"
 
-# unset any env var to local installed libraries
-unset XRDSYS
-unset RFIO
-unset CASTOR
-unset FFTW3
-unset MONALISA
-unset ORACLE
-unset PYTHIA6
-unset PYTHIA8
-unset DAVIX
+# Check actual output rather than trusting the archive filename or build flags.
+ROOT_CONFIG="$ROOT_INSTALL_DIR/bin/root-config"
+ACTUAL_ROOT_VERSION=$("$ROOT_CONFIG" --version)
+if [[ "${ACTUAL_ROOT_VERSION//\//.}" != "$ROOT_VERSION" ]]; then
+  echo "Requested ROOT $ROOT_VERSION but built $ACTUAL_ROOT_VERSION; refusing to mislabel the archive." >&2
+  exit 1
+fi
+ROOT_FLAGS=$("$ROOT_CONFIG" --cflags)
+if [[ ! "$ROOT_FLAGS" =~ -std=(c|gnu)\+\+(23|2b)($|[[:space:]]) ]]; then
+  echo "ROOT did not build in C++23 mode: $ROOT_FLAGS" >&2
+  exit 1
+fi
+# Run in a subprocess so ROOT's environment changes do not leak into packaging.
+(
+  set +u
+  . "$ROOT_INSTALL_DIR/bin/thisroot.sh"
+  "$ROOT_INSTALL_DIR/bin/root" -l -b -q \
+    -e 'if (__cplusplus <= 202002L) gSystem->Exit(1);'
+)
 
-mkdir build
-cd build
-
-if [[ $(uname -s) == "Darwin" ]]; then
-   OSXARCH=`arch`
-   if [ $OSXARCH == "arm64" ]; then
-      cmake -G Ninja \
-         -Dmacos_native=YES \
-         -Dbuiltin_fftw3=ON \
-         -Dbuiltin_freetype=ON \
-         -Dbuiltin_ftgl=ON \
-         -Dbuiltin_glew=ON \
-         -Dbuiltin_gsl=ON \
-         -Dbuiltin_lz4=ON \
-         -Dbuiltin_lzma=ON \
-         -Dbuiltin_openssl=ON \
-         -Dbuiltin_pcre=ON \
-         -Dbuiltin_tbb=ON \
-         -Dbuiltin_unuran=ON \
-         -Dbuiltin_xxhash=ON \
-         -Dbuiltin_zlib=ON \
-         -Dbuiltin_zstd=ON \
-         -DCMAKE_BUILD_TYPE=Release \
-         -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALL_DIR \
-         -DCMAKE_CXX_STANDARD=14 \
-         -DTBB_ROOT_DIR=$(brew --prefix)
-         -DPYTHON_EXECUTABLE="$pyth" \
-         $ROOTSRC
-   else
-      cmake -G Ninja \
-         -Dmacos_native=YES \
-         -Dbuiltin_fftw3=ON \
-         -Dbuiltin_freetype=ON \
-         -Dbuiltin_ftgl=ON \
-         -Dbuiltin_glew=ON \
-         -Dbuiltin_gsl=ON \
-         -Dbuiltin_lz4=ON \
-         -Dbuiltin_lzma=ON \
-         -Dbuiltin_openssl=ON \
-         -Dbuiltin_pcre=ON \
-         -Dbuiltin_tbb=ON \
-         -Dbuiltin_unuran=ON \
-         -Dbuiltin_xxhash=ON \
-         -Dbuiltin_zlib=ON \
-         -Dbuiltin_zstd=ON \
-         -DCMAKE_BUILD_TYPE=Release \
-         -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALL_DIR \
-         -DCMAKE_CXX_STANDARD=14 \
-         -DPYTHON_EXECUTABLE="$pyth" \
-         $ROOTSRC
-   fi
-else
-  # -Droot7=OFF only because centos7 fails on one construct.
-  cmake -G Ninja \
-    -Dbuiltin_fftw3=ON \
-    -Dbuiltin_freetype=ON \
-    -Dbuiltin_ftgl=ON \
-    -Dbuiltin_glew=ON \
-    -Dbuiltin_gsl=ON \
-    -Dbuiltin_lz4=ON \
-    -Dbuiltin_lzma=ON \
-    -Dbuiltin_openssl=ON \
-    -Dbuiltin_pcre=ON \
-    -Dbuiltin_tbb=ON \
-    -Dbuiltin_unuran=ON \
-    -Dbuiltin_xxhash=ON \
-    -Dbuiltin_zlib=ON \
-    -Dbuiltin_zstd=ON \
-    -Droot7=OFF \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER=$CC \
-    -DCMAKE_CXX_COMPILER=$CXX \
-    -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALL_DIR \
-    -DCMAKE_CXX_STANDARD=14 \
-    -DPYTHON_EXECUTABLE="$pyth" \
-    $ROOTSRC
+# ROOT bakes its build compiler's __cplusplus into the public RConfigure.h and
+# warns from that header whenever a consumer disagrees. Cling reports the final
+# C++23 value, so a package built by a compiler still reporting the provisional
+# 202100L only suits that same compiler and warns during every interpretation.
+ROOT_CPLUSPLUS=$(sed -n \
+  's/^[[:space:]]*#[[:space:]]*define[[:space:]]\+ROOT__cplusplus[[:space:]]\+\([0-9]\+\)L\?[[:space:]]*$/\1/p' \
+  "$ROOT_INSTALL_DIR/include/RConfigure.h")
+if [[ "$ROOT_CPLUSPLUS" != "202302" ]]; then
+  echo "ROOT reports __cplusplus=${ROOT_CPLUSPLUS:-unknown} in RConfigure.h, not the" >&2
+  echo "final C++23 value 202302. Rebuild with a compiler reporting 202302 (GCC 14" >&2
+  echo "or newer, Clang 17 or newer) so compiled consumers and Cling agree; refusing" >&2
+  echo "to package a compiler-specific archive." >&2
+  exit 1
 fi
 
-ninja install
-
-cd $ROOT_INSTALL_DIR
-if [[ $(uname -s) == "Darwin" ]]; then
-   RESULT_FILE=root_v${ROOT_VERSION}_python3_${BDM_OS}-${OSXARCH}.tar.gz
-else
-   RESULT_FILE=root_v${ROOT_VERSION}_python3_${BDM_OS}.tar.gz
-fi
-tar -zcf ${RESULT_FILE} *
-
-# mv to destination directory
-mv ${RESULT_FILE} $DEST_DIR
-cd $DEST_DIR
-shasum -a256 ${RESULT_FILE} > ${RESULT_FILE}.sha256
+ARCH=$(uname -m)
+RESULT_FILE="root_v${ROOT_VERSION}_cxx23_python${PYTHON_VERSION}_${BDM_OS}-${ARCH}.tar.gz"
+MANIFEST="$ROOT_INSTALL_DIR/bdm-build-manifest.txt"
+{
+  echo "Requested ROOT release: $ROOT_VERSION"
+  echo "OS/architecture: $BDM_OS/$ARCH"
+  "$ROOT_CONFIG" --version
+  "$ROOT_CONFIG" --cflags
+  "$ROOT_CONFIG" --features
+  echo "ROOT__cplusplus: $ROOT_CPLUSPLUS"
+  "$BDM_CMAKE" --version
+  "${CXX:-c++}" --version
+  "$PYTHON_EXECUTABLE" --version
+  echo "Configure cache:"
+  cat "$BDM_ROOT_WORK_DIR/build/CMakeCache.txt"
+} > "$MANIFEST"
+tar -czf "$BDM_ROOT_WORK_DIR/$RESULT_FILE" -C "$ROOT_INSTALL_DIR" .
+(cd "$BDM_ROOT_WORK_DIR" && shasum -a 256 "$RESULT_FILE" > "$RESULT_FILE.sha256")
+echo "Archive: $BDM_ROOT_WORK_DIR/$RESULT_FILE"
+echo "Checksum: $BDM_ROOT_WORK_DIR/$RESULT_FILE.sha256"
+echo "Use this archive with BDM_ROOT_URL and BDM_ROOT_SHA256 before publishing it."

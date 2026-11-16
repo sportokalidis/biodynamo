@@ -5,6 +5,10 @@
         link: /docs/devguide/
       - title: Build BioDynaMo
         link: /docs/devguide/build/
+      - title: C++23 Migration Plan
+        link: /docs/devguide/cxx23-migration/
+      - title: C++23 Implementation Notes
+        link: /docs/devguide/cxx23-migration-log/
       - title: Release
         link: /docs/devguide/release/
   - group: Code

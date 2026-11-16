@@ -31,38 +31,6 @@ jobs:
         fi
         echo "BDM_PYTHON_VERSION=$BDM_PYTHON_VERSION" >> "$GITHUB_ENV"
 
-    - name: Set python openssl package
-      run: |
-        if [ "${{ env.OSVERS }}" = "ubuntu-20.04" ]; then
-          echo "PYOPENSSL=python-openssl" >> $GITHUB_ENV
-        fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-22.04" ]; then
-          echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
-        fi
-        if [ "${{ env.OSVERS }}" = "ubuntu-24.04" ]; then
-          echo "PYOPENSSL=python3-openssl" >> $GITHUB_ENV
-        fi
-
-    - name: Install dependencies
-      if: matrix.os != 'ubuntu-26.04'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libopenmpi-dev gcc-11 g++-11 libomp5 libomp-dev libnuma-dev freeglut3-dev \
-          libreadline-dev libsqlite3-dev tk-dev ${{ env.PYOPENSSL }} ninja-build libblas-dev liblapack-dev libgit2-dev \
-          libboost-dev
-        curl -L -O https://github.com/Kitware/CMake/releases/download/v3.19.3/cmake-3.19.3-Linux-x86_64.sh
-        chmod +x cmake-3.19.3-Linux-x86_64.sh
-        sudo ./cmake-3.19.3-Linux-x86_64.sh --skip-license --prefix=/usr/local
-
-    - name: Start Xvfb
-      run: |
-        set -e
-        sudo apt-get -y install xvfb
-        XVFBARGS=":99 -ac -screen 0 2560x1440x24"
-        /usr/bin/Xvfb $XVFBARGS >> /tmp/Xvfb.out 2>&1 &
-        disown -ar
-        sleep 3
-
     - name: Set OSVERS
       run: |
         ID=$(grep -oP '(?<=^ID=).+' /etc/os-release | tr -d '"')
@@ -76,27 +44,26 @@ jobs:
         path: ~/.pyenv
         key: ${{ env.OSVERS }}-pyenv-${{ env.BDM_PYTHON_VERSION }}
 
-    - name: Install pyenv dependency
-      if: matrix.os != 'ubuntu-26.04' && steps.pyenv-cache.outputs.cache-hit != 'true'
-      run: |
-        if [ ! -f "$HOME/.pyenv/bin/pyenv" ]; then
-          curl https://pyenv.run | bash
-        fi
-        export PATH="$HOME/.pyenv/bin:$PATH"
-        eval "$(pyenv init --path)"
-        eval "$(pyenv init -)"
-        PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.9.1
-        pyenv shell 3.9.1
-
-    - name: Install Ubuntu 26.04 prerequisites
-      if: matrix.os == 'ubuntu-26.04'
+    - name: Install prerequisites
       run: SILENT_INSTALL=1 ./prerequisites.sh required
+
+    - name: Install CI build dependencies
+      run: sudo apt-get install -y gcc-11 g++-11 ninja-build libgit2-dev libboost-dev
+
+    - name: Start Xvfb
+      run: |
+        set -e
+        sudo apt-get -y install xvfb
+        XVFBARGS=":99 -ac -screen 0 2560x1440x24"
+        /usr/bin/Xvfb $XVFBARGS >> /tmp/Xvfb.out 2>&1 &
+        disown -ar
+        sleep 3
 
     - name: Cache Third Party Packages
       uses: actions/cache@v4
       with:
         path: build/third_party
-        key: ${{ env.OSVERS }}-third-party-${{ hashFiles('cmake/external/SHA256Digests.cmake') }}
+        key: ${{ env.OSVERS }}-third-party-v2-${{ hashFiles('cmake/external/SHA256Digests.cmake', 'cmake/utils.cmake') }}
 
     - name: Build BioDynaMo
       shell: bash
@@ -105,6 +72,9 @@ jobs:
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
         pyenv shell "$BDM_PYTHON_VERSION"
+        cmake --version
+        c++ --version
+        python test/cmake/cxx23_migration_test.py
         cmake -P test/cmake/ubuntu-platforms.cmake
         cmake -G Ninja \
           -Dparaview=ON \
@@ -120,6 +90,8 @@ jobs:
       run: |
         . bin/thisbdm.sh
         bdm config
+        bdm-config --cxx-standard
+        root-config --cflags
         export DISPLAY=:99.0
         ninja run-unit-tests
 
@@ -130,11 +102,8 @@ jobs:
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
         pyenv shell 3.9.1
-        wget https://apt.llvm.org/llvm-snapshot.gpg.key
-        sudo apt-key add llvm-snapshot.gpg.key
-        sudo add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main"
         sudo apt update
-        sudo apt install -y cloc clang-tidy clang-format
+        sudo apt install -y cloc clang-tidy-18 clang-format
         cloc --exclude-dir=build .
         cmake -B build
         cd build
@@ -143,4 +112,4 @@ jobs:
         cmake --build . --target show-format || true
         cmake --build . --target show-tidy || true
         cmake --build . --target check-cpplint || true
-      if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-22.04'
+      if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-24.04'
