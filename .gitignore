@@ -87,3 +87,9 @@ __pycache__/
 *.root
 *.vtu
 *.pvtu
+
+#------------------- Local-only docs (standalone exporter) --------------------
+doc/dev_guide/standalone_visualization.md
+doc/dev_guide/visualization_benchmark.md
+doc/dev_guide/visualization_pipeline.md
+demo/standalone_visualization/README.md

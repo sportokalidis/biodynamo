@@ -115,7 +115,13 @@ class SimulationTest : public ::testing::Test {
 
   void ValidateNonCLIParameter(const Param* param) {
     EXPECT_EQ(123u, param->random_seed);
+    // The TOML content below never sets `adaptor`, so this checks the
+    // compiled-in default, which depends on which adaptor was actually built.
+#ifdef USE_PARAVIEW
     EXPECT_EQ("paraview", param->visualization_engine);
+#else
+    EXPECT_EQ("standalone", param->visualization_engine);
+#endif
     EXPECT_EQ("result-dir", param->output_dir);
     EXPECT_EQ("euler", param->diffusion_method);
     EXPECT_EQ(3600u, param->backup_interval);

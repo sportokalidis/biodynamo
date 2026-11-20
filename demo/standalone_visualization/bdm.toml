@@ -1,0 +1,13 @@
+[visualization]
+export = true
+interval = 1
+adaptor = "standalone"
+
+[[visualize_agent]]
+  name = "Cell"
+  additional_data_members = [ "density_" ]
+
+[[visualize_diffusion]]
+  name = "Kalium"
+  concentration = true
+  gradient = true

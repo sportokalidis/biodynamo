@@ -18,8 +18,10 @@
 #include "core/param/param.h"
 #include "core/simulation.h"
 #include "core/util/log.h"
+#include "core/visualization/standalone/adaptor.h"
 #include "core/visualization/visualization_adaptor.h"
 
+#include "TEnv.h"
 #include "TInterpreter.h"
 #include "TPluginManager.h"
 #include "TROOT.h"
@@ -38,11 +40,24 @@ VisualizationAdaptor *VisualizationAdaptor::Create(const std::string &adaptor) {
     return nullptr;
   }
   VisualizationAdaptor *va = nullptr;
+  // Ensure ROOT reads BioDynaMo plugin configuration
+  const char *bdmsys = std::getenv("BDMSYS");
+  if (bdmsys) {
+    std::string rc = std::string(bdmsys) + "/etc/bdm.rootrc";
+    gEnv->ReadFile(rc.c_str(), kEnvUser);
+  }
   bool first_try = !loaded_.count(adaptor);
   // If this is the first time we try to load `adaptor`
   if (first_try) {
     // Try to find plugin handler in etc/plugins
     auto *h = gPluginMgr->FindHandler("VisualizationAdaptor", adaptor.c_str());
+    // If not found via plugin maps, register handler programmatically
+    if (!h && adaptor == "standalone") {
+      gPluginMgr->AddHandler("VisualizationAdaptor", "standalone",
+                             "bdm::StandaloneAdaptor", "VisualizationAdaptor",
+                             "Factory()");
+      h = gPluginMgr->FindHandler("VisualizationAdaptor", adaptor.c_str());
+    }
 #ifdef USE_PARAVIEW
     // ROOT 6.40.04 can miss plugins after the first directory in
     // Root.PluginPath. Register the built-in fallback only when no handler was

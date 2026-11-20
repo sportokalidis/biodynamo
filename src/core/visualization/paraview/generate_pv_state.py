@@ -81,11 +81,15 @@ def BuildDefaultPipeline(json_filename):
 
     sim_info = build_info['simulation']
 
-    # change directory
+    # normalize result directory to absolute path for robust PVSM regardless of working directory
     result_dir = sim_info['result_dir']
     if result_dir != "" and not os.path.exists(result_dir):
         print('Simulation result directory "{0}" does not exist'.format(result_dir))
         sys.exit(1)
+    abs_result_dir = os.path.abspath(result_dir) if result_dir != "" else os.getcwd()
+    # store back the absolute path so WritePvsmFile can use it and use it for readers
+    sim_info['result_dir'] = abs_result_dir
+    result_dir = abs_result_dir
 
     # get active view
     render_view = GetActiveViewOrCreate('RenderView')

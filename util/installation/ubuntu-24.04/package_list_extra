@@ -2,6 +2,8 @@ clang
 clang-format
 clang-tidy
 doxygen
+g++-11
+gcc-11
 graphviz
 libxml2-dev
 llvm-14

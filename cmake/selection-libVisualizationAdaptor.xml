@@ -4,5 +4,6 @@
 <lcgdict>
   <selection>
     <class name="bdm::ParaviewAdaptor" />
+    <class name="bdm::StandaloneAdaptor" />
   </selection>
 </lcgdict>
